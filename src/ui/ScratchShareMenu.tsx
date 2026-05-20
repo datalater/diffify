@@ -16,16 +16,15 @@ import {
   NAV_MENU_TRIGGER_CLASS,
   ScratchNavPopover,
 } from './ScratchNavPopover';
+import {
+  NAV_MENU_ITEM_CLASS,
+  NAV_SUBMENU_ITEM_CLASS,
+  NAV_SUBMENU_PANEL_CLASS,
+} from './scratch-github-ui';
 
 const SHARE_PANEL_CLASS = 'min-w-[11rem] px-1 py-1 font-sans';
 
 const URL_COPY_DISABLED_TITLE = `인코딩된 URL의 ?state= 값이 최대 ${MAX_URL_STATE_CHARS.toLocaleString()}자를 넘어 공유할 수 없습니다. (브라우저 전체 URL 길이 한도가 아닌, gzip·base64로 인코딩한 state 파라미터 값 기준)`;
-
-const MENU_ITEM_CLASS =
-  'w-full cursor-pointer rounded px-3 py-1.5 text-left text-[12px] font-semibold text-slate-100 transition hover:bg-slate-700/80 disabled:cursor-not-allowed disabled:opacity-40';
-
-const SUBMENU_ITEM_CLASS =
-  'w-full cursor-pointer whitespace-nowrap rounded px-3 py-1.5 text-left text-[12px] text-slate-200 transition hover:bg-slate-700/80';
 
 export function ScratchShareMenu({
   persistContent,
@@ -120,7 +119,7 @@ export function ScratchShareMenu({
               : '현재 입력을 ?state= URL로 클립보드에 복사'
           }
           onClick={() => void onCopyShareUrl()}
-          className={MENU_ITEM_CLASS}
+          className={NAV_MENU_ITEM_CLASS}
         >
           URL 복사
         </button>
@@ -224,22 +223,22 @@ function ShareFlyoutMenu({
         }}
         aria-expanded={open}
         aria-haspopup="menu"
-        className={`${MENU_ITEM_CLASS} flex items-center justify-between gap-3`}
+          className={`${NAV_MENU_ITEM_CLASS} flex items-center justify-between gap-3`}
       >
         {label}
-        <span className="text-[10px] text-slate-500" aria-hidden>
+        <span className="text-[#8b949e]" aria-hidden>
           ▸
         </span>
       </button>
       {open ? (
         <div
           role="menu"
-          className="absolute top-0 left-full z-[60] ml-0.5 min-w-[7rem] rounded border border-slate-600 bg-slate-800 py-1 pl-0.5 shadow-lg"
+          className={NAV_SUBMENU_PANEL_CLASS}
         >
           <button
             type="button"
             role="menuitem"
-            className={SUBMENU_ITEM_CLASS}
+            className={NAV_SUBMENU_ITEM_CLASS}
             onClick={() => {
               onSelect('source');
               setOpen(false);
@@ -250,7 +249,7 @@ function ShareFlyoutMenu({
           <button
             type="button"
             role="menuitem"
-            className={SUBMENU_ITEM_CLASS}
+            className={NAV_SUBMENU_ITEM_CLASS}
             onClick={() => {
               onSelect('result');
               setOpen(false);

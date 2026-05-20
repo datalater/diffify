@@ -7,8 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 
-const PANEL_CLASS =
-  'absolute left-0 top-full z-50 mt-1 min-w-[12rem] rounded border border-slate-600 bg-slate-800 py-2 shadow-lg';
+import { NAV_PANEL_CLASS } from './scratch-github-ui';
 
 export function ScratchNavPopover({
   trigger,
@@ -66,7 +65,7 @@ export function ScratchNavPopover({
           id={panelId}
           role="dialog"
           aria-labelledby={triggerId}
-          className={`${PANEL_CLASS} ${panelClassName ?? ''}`}
+          className={`${NAV_PANEL_CLASS} ${panelClassName ?? ''}`}
         >
           {children}
         </div>
@@ -75,16 +74,17 @@ export function ScratchNavPopover({
   );
 }
 
-export const NAV_MENU_TRIGGER_CLASS =
-  'inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-500 bg-slate-700 px-2.5 py-1.5 text-[12px] font-semibold text-slate-100 transition hover:bg-slate-600';
+export { NAV_MENU_TRIGGER_CLASS } from './scratch-github-ui';
 
 export function NavMenuChevron({ open }: { open: boolean }) {
   return (
     <span
-      className={`text-[10px] text-slate-400 transition ${open ? 'rotate-180' : ''}`}
+      className={`text-[#8b949e] transition ${open ? 'rotate-180' : ''}`}
       aria-hidden
     >
-      ▾
+      <svg className="size-3" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M4.427 6.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 6H4.604a.25.25 0 00-.177.427z" />
+      </svg>
     </span>
   );
 }

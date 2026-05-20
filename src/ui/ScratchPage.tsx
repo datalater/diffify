@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   formatScratchBodyHtml,
   formatScratchHeadFragment,
@@ -7,14 +7,25 @@ import { createScratchDocument } from "../lib/source-document";
 import { SCRATCH_SOURCE_HEAD_EXAMPLES } from "../lib/scratch-head-examples";
 import {
   copyScratchShareUrl,
+  decodeScratchState,
   defaultScratchPreviewDimensions,
   defaultScratchSnapshot,
-  loadScratchInitialSnapshot,
-  persistScratchState,
   scratchPersistedContentFromEditors,
   type ScratchEditors,
   type ScratchPersistSnapshot,
 } from "../lib/scratch-persist";
+import {
+  checkoutScratchVersionEntry,
+  commitScratchVersion,
+  discardScratchDraftToCurrent,
+  isScratchWorkspaceDirty,
+  loadScratchWorkspace,
+  readScratchVersionMeta,
+  SCRATCH_VERSION_DRAFT_VALUE,
+  writeScratchDraft,
+  type ScratchVersionMeta,
+} from "../lib/scratch-version-storage";
+import { writeScratchShowingSource } from "../lib/scratch-ui-state";
 import type { ScratchHtmlLayer } from "../lib/scratch-html-io";
 import { DiffifyLiveOverlay } from "./DiffifyLiveOverlay";
 import { ScratchFullDocumentDialog } from "./ScratchFullDocumentDialog";
@@ -35,7 +46,7 @@ import {
 import { ScratchTopBar } from "./ScratchTopBar";
 
 const LIVE_PREVIEW_DEBOUNCE_MS = 200;
-const PERSIST_DEBOUNCE_MS = 400;
+const DRAFT_DEBOUNCE_MS = 400;
 
 const BASELINE_PREVIEW = defaultScratchPreviewDimensions();
 
@@ -53,6 +64,17 @@ function editorsFromSnapshot(snapshot: ScratchPersistSnapshot): ScratchEditors {
     resultHead: snapshot.resultHead,
     resultHtml: snapshot.resultHtml,
   };
+}
+
+function applyEditorsToEditorState(
+  document: ScratchEditors,
+  setters: {
+    setEditors: (e: ScratchEditors) => void;
+    setPreviewDocs: (d: ReturnType<typeof buildPreviewDocs>) => void;
+  },
+): void {
+  setters.setEditors(document);
+  setters.setPreviewDocs(buildPreviewDocs(document));
 }
 
 const NAV_BADGE = {
@@ -127,8 +149,11 @@ function clampHeight(n: number): number {
 }
 
 export function ScratchPage() {
-  const skipPersistRef = useRef(true);
   const [hydrated, setHydrated] = useState(false);
+  const [versionMeta, setVersionMeta] = useState<ScratchVersionMeta>(() =>
+    readScratchVersionMeta(),
+  );
+  const [versionDirty, setVersionDirty] = useState(false);
   const defaults = defaultScratchSnapshot();
   const [editors, setEditors] = useState<ScratchEditors>(() =>
     editorsFromSnapshot(defaults),
@@ -140,7 +165,7 @@ export function ScratchPage() {
   const [previewWidth, setPreviewWidth] = useState(defaults.previewWidth);
   const [previewHeight, setPreviewHeight] = useState(defaults.previewHeight);
   const [status, setStatus] = useState(
-    "저장된 내용을 불러오는 중… (URL `?state=` 또는 localStorage)",
+    "저장된 내용을 불러오는 중… (draft·버전·URL `?state=`)",
   );
   const [previewMeasured, setPreviewMeasured] = useState<{
     width: number;
@@ -156,26 +181,47 @@ export function ScratchPage() {
     [editors, showingSource],
   );
 
+  const documentContent = editors;
+
   useEffect(() => {
     let cancelled = false;
-    void loadScratchInitialSnapshot().then((loaded) => {
+    void (async () => {
+      const urlEncoded = new URLSearchParams(window.location.search).get(
+        "state",
+      );
+      const urlSnap = urlEncoded
+        ? await decodeScratchState(urlEncoded)
+        : null;
+
+      const workspace = await loadScratchWorkspace(urlSnap);
       if (cancelled) return;
-      const snap = loaded ?? defaultScratchSnapshot();
-      setEditors(editorsFromSnapshot(snap));
-      setPreviewDocs(buildPreviewDocs(editorsFromSnapshot(snap)));
-      setShowingSource(snap.showingSource);
+
+      setEditors(workspace.editors);
+      setPreviewDocs(buildPreviewDocs(workspace.editors));
+      setShowingSource(workspace.showingSource);
+      setVersionMeta(workspace.meta);
       const { previewWidth: w, previewHeight: h } =
         defaultScratchPreviewDimensions();
       setPreviewWidth(clampWidth(w));
       setPreviewHeight(clampHeight(h));
-      skipPersistRef.current = false;
       setHydrated(true);
-      setStatus(
-        loaded
-          ? "URL 또는 localStorage에서 복원했다. 입력은 자동 저장·주소(`?state=`)에 반영된다."
-          : "head·HTML 입력이 미리보기에 반영된다. 입력은 자동 저장된다.",
+
+      const dirty = await isScratchWorkspaceDirty(
+        workspace.editors,
+        workspace.meta,
       );
-    });
+      if (!cancelled) setVersionDirty(dirty);
+
+      setStatus(
+        urlSnap
+          ? "URL `?state=`를 draft로 불러왔다. 확정하려면 「버전 생성」을 누른다."
+          : workspace.hasDraft
+            ? "draft를 불러왔다. 확정하려면 「버전 생성」을 누른다."
+            : workspace.meta.versionLine.length > 0
+              ? "마지막 확정 버전을 불러왔다. 편집하면 draft만 갱신된다."
+              : "head·HTML 입력이 미리보기에 반영된다. 편집 후 「버전 생성」으로 확정한다.",
+      );
+    })();
     return () => {
       cancelled = true;
     };
@@ -189,18 +235,72 @@ export function ScratchPage() {
   }, [editors]);
 
   useEffect(() => {
-    if (!hydrated || skipPersistRef.current) return;
+    if (!hydrated) return;
     const timer = window.setTimeout(() => {
-      void persistScratchState(persistContent).then((result) => {
-        if (result.urlSkippedReason === "too_long") {
-          setStatus(
-            "내용이 커서 URL에는 담지 못했다. 이 브라우저 localStorage에는 저장됨.",
-          );
-        }
-      });
-    }, PERSIST_DEBOUNCE_MS);
+      writeScratchDraft(documentContent);
+    }, DRAFT_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [hydrated, persistContent]);
+  }, [hydrated, documentContent]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    writeScratchShowingSource(showingSource);
+  }, [hydrated, showingSource]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    let cancelled = false;
+    void isScratchWorkspaceDirty(documentContent, versionMeta).then((dirty) => {
+      if (!cancelled) setVersionDirty(dirty);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, documentContent, versionMeta]);
+
+  const handleCreateVersion = useCallback(async () => {
+    const result = await commitScratchVersion(documentContent);
+    if (!result) {
+      setStatus("버전을 저장하지 못했다 (IndexedDB·용량).");
+      return;
+    }
+    setVersionMeta(result.meta);
+    setVersionDirty(false);
+    setStatus(`「${result.entry.label}」 버전을 확정했다.`);
+  }, [documentContent]);
+
+  const handleSelectVersionValue = useCallback(
+    async (value: string) => {
+      if (value === SCRATCH_VERSION_DRAFT_VALUE) return;
+
+      if (!versionDirty && value === versionMeta.currentEntryId) {
+        return;
+      }
+
+      const result =
+        versionDirty && value === versionMeta.currentEntryId
+          ? await discardScratchDraftToCurrent(versionMeta)
+          : await checkoutScratchVersionEntry(value);
+
+      if (!result) {
+        setStatus("버전을 불러오지 못했다.");
+        return;
+      }
+
+      applyEditorsToEditorState(result.editors, {
+        setEditors,
+        setPreviewDocs,
+      });
+      setVersionMeta(result.meta);
+      setVersionDirty(false);
+      setStatus(
+        versionDirty && value === versionMeta.currentEntryId
+          ? `draft를 버리고 「${result.entry.label}」로 맞췄다.`
+          : `「${result.entry.label}」로 reset했다 (draft·타임라인 변경 없음).`,
+      );
+    },
+    [versionMeta, versionDirty],
+  );
 
   useEffect(() => {
     if (!paneVisibility.preview) return;
@@ -322,6 +422,11 @@ export function ScratchPage() {
         onCopyShareUrl={handleCopyShareUrl}
         onImportLayer={handleImportLayer}
         onNotify={setStatus}
+        versionMeta={versionMeta}
+        versionDirty={versionDirty}
+        versionControlsDisabled={!hydrated}
+        onCreateVersion={() => void handleCreateVersion()}
+        onSelectVersionValue={(value) => void handleSelectVersionValue(value)}
       />
 
       <ScratchEditorPaneBar

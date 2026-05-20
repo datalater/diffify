@@ -5,6 +5,8 @@ import type {
   ScratchPersistedContent,
 } from '../lib/scratch-persist';
 import { ScratchShareMenu } from './ScratchShareMenu';
+import { ScratchVersionControls } from './ScratchVersionControls';
+import type { ScratchVersionMeta } from '../lib/scratch-version-storage';
 
 export type ScratchTopBarProps = {
   status: string;
@@ -16,6 +18,11 @@ export type ScratchTopBarProps = {
     parts: { head: string; bodyHtml: string },
   ) => void;
   onNotify: (message: string) => void;
+  versionMeta: ScratchVersionMeta;
+  versionDirty: boolean;
+  versionControlsDisabled?: boolean;
+  onCreateVersion: () => void;
+  onSelectVersionValue: (value: string) => void;
   trailing?: ReactNode;
 };
 
@@ -26,12 +33,17 @@ export function ScratchTopBar({
   onCopyShareUrl,
   onImportLayer,
   onNotify,
+  versionMeta,
+  versionDirty,
+  versionControlsDisabled,
+  onCreateVersion,
+  onSelectVersionValue,
   trailing,
 }: ScratchTopBarProps) {
   return (
-    <nav className="border-b border-slate-700 bg-slate-800 font-mono text-[13px] text-slate-200 shadow-sm">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-600/80 px-4 py-2.5">
-        <span className="text-[14px] font-semibold tracking-tight text-slate-100">
+    <nav className="border-b border-[#30363d] bg-[#161b22] font-sans text-[13px] text-[#e6edf3]">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2">
+        <span className="mr-1 text-sm font-semibold tracking-tight text-[#e6edf3]">
           diffify scratch
         </span>
 
@@ -43,9 +55,17 @@ export function ScratchTopBar({
           onNotify={onNotify}
         />
 
+        <ScratchVersionControls
+          meta={versionMeta}
+          dirty={versionDirty}
+          disabled={versionControlsDisabled}
+          onCreateVersion={onCreateVersion}
+          onSelectValue={onSelectVersionValue}
+        />
+
         {trailing}
       </div>
-      <p className="flex items-start gap-2 px-4 py-2 font-sans text-xs leading-snug text-slate-300">
+      <p className="flex items-start gap-2 border-t border-[#30363d] bg-[#0d1117] px-4 py-2 text-xs leading-snug text-[#8b949e]">
         <span className="shrink-0" aria-hidden>
           📢
         </span>
