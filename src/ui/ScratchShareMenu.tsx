@@ -69,7 +69,7 @@ export function ScratchShareMenu({
       return;
     }
     if (result.reason === "aborted") return;
-    onNotify("파일 내보내기에 실패했다.");
+    onNotify("파일보내기에 실패했다.");
   };
 
   const handleImport = async (layer: ScratchHtmlLayer) => {
@@ -102,7 +102,7 @@ export function ScratchShareMenu({
           aria-haspopup="dialog"
           aria-controls={open ? panelId : undefined}
           className={NAV_MENU_TRIGGER_CLASS}
-          title="공유·가져오기·내보내기"
+          title="공유·가져오기·보내기"
         >
           공유
           <NavMenuChevron open={open} />
@@ -124,7 +124,7 @@ export function ScratchShareMenu({
           URL 복사
         </button>
         <ShareFlyoutMenu
-          label="내보내기"
+          label="보내기"
           onSelect={(layer) => void handleExport(layer)}
         />
         <ShareFlyoutMenu

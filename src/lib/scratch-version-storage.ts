@@ -3,6 +3,13 @@ import {
   scratchDocumentEquals,
 } from './scratch-content-hash';
 import {
+  blobStorageId,
+  ensureScratchProjectsReady,
+  getActiveProjectId,
+  projectDraftKey,
+  projectMetaKey,
+} from './scratch-project-registry';
+import {
   readScratchShowingSource,
   writeScratchShowingSource,
 } from './scratch-ui-state';
@@ -27,18 +34,23 @@ export type ScratchVersionMeta = {
   currentEntryId: string | null;
 };
 
-const META_KEY = 'diffify-scratch-meta';
-const DRAFT_KEY = 'diffify-scratch-draft';
 const LEGACY_KEY = 'diffify-scratch-v1';
 
 const IDB_NAME = 'diffify-scratch';
-const IDB_VERSION = 1;
+const IDB_VERSION = 2;
 const BLOB_STORE = 'blobs';
 
 const MAX_VERSION_LINE = 50;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 let migratePromise: Promise<void> | null = null;
+let idbLegacyMigrated = false;
+
+type BlobRecord = {
+  id: string;
+  hash: string;
+  content: ScratchEditors;
+};
 
 function openDatabase(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
@@ -46,9 +58,10 @@ function openDatabase(): Promise<IDBDatabase> {
     const request = indexedDB.open(IDB_NAME, IDB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(BLOB_STORE)) {
-        db.createObjectStore(BLOB_STORE, { keyPath: 'hash' });
+      if (db.objectStoreNames.contains(BLOB_STORE)) {
+        db.deleteObjectStore(BLOB_STORE);
       }
+      db.createObjectStore(BLOB_STORE, { keyPath: 'id' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () =>
@@ -76,22 +89,32 @@ function normalizeStoredDocument(
   };
 }
 
-async function putBlob(hash: string, document: ScratchEditors): Promise<void> {
+async function putBlob(
+  projectId: string,
+  hash: string,
+  document: ScratchEditors,
+): Promise<void> {
   const db = await openDatabase();
   const tx = db.transaction(BLOB_STORE, 'readwrite');
   const store = tx.objectStore(BLOB_STORE);
-  await idbRequest(store.put({ hash, content: document }));
+  const record: BlobRecord = {
+    id: blobStorageId(projectId, hash),
+    hash,
+    content: document,
+  };
+  await idbRequest(store.put(record));
 }
 
-export async function getBlobByHash(
+async function getBlobByHash(
+  projectId: string,
   hash: string,
 ): Promise<ScratchEditors | null> {
   try {
     const db = await openDatabase();
     const tx = db.transaction(BLOB_STORE, 'readonly');
     const store = tx.objectStore(BLOB_STORE);
-    const row = (await idbRequest(store.get(hash))) as
-      | { hash: string; content: ScratchEditors & { showingSource?: boolean } }
+    const row = (await idbRequest(store.get(blobStorageId(projectId, hash)))) as
+      | (BlobRecord & { content?: ScratchEditors & { showingSource?: boolean } })
       | undefined;
     if (!row?.content) return null;
     return normalizeStoredDocument(row.content);
@@ -100,9 +123,57 @@ export async function getBlobByHash(
   }
 }
 
-export function readScratchVersionMeta(): ScratchVersionMeta {
+async function migrateLegacyIdbBlobs(projectId: string): Promise<void> {
+  if (idbLegacyMigrated || typeof indexedDB === 'undefined') return;
+  idbLegacyMigrated = true;
+
   try {
-    const raw = localStorage.getItem(META_KEY);
+    const legacyDb = await new Promise<IDBDatabase | null>((resolve) => {
+      const request = indexedDB.open(IDB_NAME, 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+      request.onupgradeneeded = () => resolve(null);
+    });
+    if (!legacyDb?.objectStoreNames.contains(BLOB_STORE)) {
+      legacyDb?.close();
+      return;
+    }
+
+    const rows = await new Promise<
+      Array<{ hash: string; content: ScratchEditors }>
+    >((resolve, reject) => {
+      const tx = legacyDb.transaction(BLOB_STORE, 'readonly');
+      const req = tx.objectStore(BLOB_STORE).getAll();
+      req.onsuccess = () => {
+        const raw = (req.result as Array<{ hash: string; content: unknown }>) ?? [];
+        resolve(
+          raw
+            .filter((row) => typeof row.hash === 'string' && row.content)
+            .map((row) => ({
+              hash: row.hash,
+              content: normalizeStoredDocument(
+                row.content as ScratchEditors & { showingSource?: boolean },
+              ),
+            })),
+        );
+      };
+      req.onerror = () => reject(req.error);
+    });
+    legacyDb.close();
+
+    for (const row of rows) {
+      await putBlob(projectId, row.hash, row.content);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function readScratchVersionMeta(
+  projectId = getActiveProjectId(),
+): ScratchVersionMeta {
+  try {
+    const raw = localStorage.getItem(projectMetaKey(projectId));
     if (!raw) {
       return { v: 1, versionLine: [], currentEntryId: null };
     }
@@ -120,22 +191,25 @@ export function readScratchVersionMeta(): ScratchVersionMeta {
   }
 }
 
-export function writeScratchVersionMeta(meta: ScratchVersionMeta): void {
+export function writeScratchVersionMeta(
+  meta: ScratchVersionMeta,
+  projectId = getActiveProjectId(),
+): void {
   try {
-    localStorage.setItem(META_KEY, JSON.stringify(meta));
+    localStorage.setItem(projectMetaKey(projectId), JSON.stringify(meta));
   } catch {
     /* quota */
   }
 }
 
-export function readScratchDraft(): ScratchEditors | null {
+function readScratchDraft(projectId = getActiveProjectId()): ScratchEditors | null {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY);
+    const raw = localStorage.getItem(projectDraftKey(projectId));
     if (!raw) return null;
     const payload = JSON.parse(raw) as unknown;
     if (!isDraftPayload(payload)) return null;
     if ('ls' in payload && (payload.ls === 0 || payload.ls === 1)) {
-      writeScratchShowingSource(payload.ls === 1);
+      writeScratchShowingSource(payload.ls === 1, projectId);
     }
     return draftPayloadToDocument(payload);
   } catch {
@@ -143,10 +217,13 @@ export function readScratchDraft(): ScratchEditors | null {
   }
 }
 
-export function writeScratchDraft(document: ScratchEditors): void {
+export function writeScratchDraft(
+  document: ScratchEditors,
+  projectId = getActiveProjectId(),
+): void {
   try {
     localStorage.setItem(
-      DRAFT_KEY,
+      projectDraftKey(projectId),
       JSON.stringify(documentToDraftPayload(document)),
     );
   } catch {
@@ -154,9 +231,9 @@ export function writeScratchDraft(document: ScratchEditors): void {
   }
 }
 
-export function clearScratchDraft(): void {
+export function clearScratchDraft(projectId = getActiveProjectId()): void {
   try {
-    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(projectDraftKey(projectId));
   } catch {
     /* ignore */
   }
@@ -228,10 +305,8 @@ function nextVersionLabel(lineLength: number): string {
   return `v${lineLength + 1}`;
 }
 
-/** select `value` when editor has unsaved draft */
 export const SCRATCH_VERSION_DRAFT_VALUE = '__draft__';
 
-/** Append 시에만 사용 — 라벨 유일: `v4(v1 restored)` */
 export function restoredVersionLabel(
   sourceLabel: string,
   versionLineLength: number,
@@ -239,30 +314,44 @@ export function restoredVersionLabel(
   return `v${versionLineLength + 1}(${sourceLabel} restored)`;
 }
 
-export async function migrateLegacyScratchStorage(): Promise<void> {
-  if (migratePromise) return migratePromise;
+async function migrateLegacyScratchStorage(
+  projectId: string,
+): Promise<void> {
+  const meta = readScratchVersionMeta(projectId);
+  if (meta.versionLine.length > 0 || readScratchDraft(projectId)) return;
 
-  migratePromise = (async () => {
-    const meta = readScratchVersionMeta();
-    if (meta.versionLine.length > 0 || readScratchDraft()) return;
-
-    try {
-      const raw = localStorage.getItem(LEGACY_KEY);
-      if (!raw) return;
-      const payload = JSON.parse(raw) as unknown;
-      if (!isLegacyPayload(payload)) return;
-      const legacy = contentFromPayload(payload);
-      writeScratchDraft({
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if (!raw) return;
+    const payload = JSON.parse(raw) as unknown;
+    if (!isLegacyPayload(payload)) return;
+    const legacy = contentFromPayload(payload);
+    writeScratchDraft(
+      {
         sourceHead: legacy.sourceHead,
         sourceHtml: legacy.sourceHtml,
         resultHead: legacy.resultHead,
         resultHtml: legacy.resultHtml,
-      });
-      writeScratchShowingSource(legacy.showingSource);
-      localStorage.removeItem(LEGACY_KEY);
-    } catch {
-      /* ignore */
-    }
+      },
+      projectId,
+    );
+    writeScratchShowingSource(legacy.showingSource, projectId);
+    localStorage.removeItem(LEGACY_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function ensureScratchStorageReady(): Promise<void> {
+  if (migratePromise) return migratePromise;
+
+  migratePromise = (async () => {
+    const registry = await ensureScratchProjectsReady();
+    const projectId = registry.activeProjectId;
+    // v2 open 전에 v1 blob을 읽어야 upgrade 시 데이터가 지워지지 않는다.
+    await migrateLegacyIdbBlobs(projectId);
+    await openDatabase();
+    await migrateLegacyScratchStorage(projectId);
   })();
 
   return migratePromise;
@@ -278,11 +367,12 @@ export function findVersionEntry(
 export async function loadCommittedDocument(
   meta: ScratchVersionMeta,
   entryId: string | null,
+  projectId = getActiveProjectId(),
 ): Promise<ScratchEditors | null> {
   if (!entryId) return null;
   const entry = findVersionEntry(meta, entryId);
   if (!entry) return null;
-  return getBlobByHash(entry.hash);
+  return getBlobByHash(projectId, entry.hash);
 }
 
 export type ScratchWorkspaceLoad = {
@@ -294,8 +384,9 @@ export type ScratchWorkspaceLoad = {
 
 export async function loadScratchWorkspace(
   urlOverride: ScratchPersistSnapshot | null,
+  projectId = getActiveProjectId(),
 ): Promise<ScratchWorkspaceLoad> {
-  await migrateLegacyScratchStorage();
+  await ensureScratchStorageReady();
 
   const defaultShowingSource = defaultScratchSnapshot().showingSource;
 
@@ -306,9 +397,9 @@ export async function loadScratchWorkspace(
       resultHead: urlOverride.resultHead,
       resultHtml: urlOverride.resultHtml,
     };
-    writeScratchDraft(editors);
-    writeScratchShowingSource(urlOverride.showingSource);
-    const meta = readScratchVersionMeta();
+    writeScratchDraft(editors, projectId);
+    writeScratchShowingSource(urlOverride.showingSource, projectId);
+    const meta = readScratchVersionMeta(projectId);
     return {
       editors,
       showingSource: urlOverride.showingSource,
@@ -317,21 +408,28 @@ export async function loadScratchWorkspace(
     };
   }
 
-  const meta = readScratchVersionMeta();
-  const showingSource = readScratchShowingSource(defaultShowingSource);
-  const draft = readScratchDraft();
+  const meta = readScratchVersionMeta(projectId);
+  const showingSource = readScratchShowingSource(
+    defaultShowingSource,
+    projectId,
+  );
+  const draft = readScratchDraft(projectId);
   if (draft) {
     return { editors: draft, showingSource, meta, hasDraft: true };
   }
 
-  const fromCurrent = await loadCommittedDocument(meta, meta.currentEntryId);
+  const fromCurrent = await loadCommittedDocument(
+    meta,
+    meta.currentEntryId,
+    projectId,
+  );
   if (fromCurrent) {
     return { editors: fromCurrent, showingSource, meta, hasDraft: false };
   }
 
   const last = meta.versionLine[meta.versionLine.length - 1];
   if (last) {
-    const fromLast = await getBlobByHash(last.hash);
+    const fromLast = await getBlobByHash(projectId, last.hash);
     if (fromLast) {
       return { editors: fromLast, showingSource, meta, hasDraft: false };
     }
@@ -346,7 +444,7 @@ export async function loadScratchWorkspace(
   };
   return {
     editors,
-    showingSource: readScratchShowingSource(defaults.showingSource),
+    showingSource: readScratchShowingSource(defaults.showingSource, projectId),
     meta,
     hasDraft: false,
   };
@@ -355,9 +453,14 @@ export async function loadScratchWorkspace(
 export async function isScratchWorkspaceDirty(
   document: ScratchEditors,
   meta: ScratchVersionMeta,
+  projectId = getActiveProjectId(),
 ): Promise<boolean> {
-  if (readScratchDraft()) {
-    const committed = await loadCommittedDocument(meta, meta.currentEntryId);
+  if (readScratchDraft(projectId)) {
+    const committed = await loadCommittedDocument(
+      meta,
+      meta.currentEntryId,
+      projectId,
+    );
     if (!committed) return true;
     return !(await scratchDocumentEquals(document, committed));
   }
@@ -373,7 +476,11 @@ export async function isScratchWorkspaceDirty(
     return !(await scratchDocumentEquals(document, baseline));
   }
 
-  const committed = await loadCommittedDocument(meta, meta.currentEntryId);
+  const committed = await loadCommittedDocument(
+    meta,
+    meta.currentEntryId,
+    projectId,
+  );
   if (!committed) return true;
   return !(await scratchDocumentEquals(document, committed));
 }
@@ -385,12 +492,13 @@ export type CommitScratchVersionResult = {
 
 export async function commitScratchVersion(
   document: ScratchEditors,
+  projectId = getActiveProjectId(),
 ): Promise<CommitScratchVersionResult | null> {
   try {
     const hash = await hashScratchDocument(document);
-    await putBlob(hash, document);
+    await putBlob(projectId, hash, document);
 
-    const meta = readScratchVersionMeta();
+    const meta = readScratchVersionMeta(projectId);
     const entry: ScratchVersionEntry = {
       entryId: crypto.randomUUID(),
       hash,
@@ -405,8 +513,8 @@ export async function commitScratchVersion(
       currentEntryId: entry.entryId,
     };
 
-    writeScratchVersionMeta(nextMeta);
-    clearScratchDraft();
+    writeScratchVersionMeta(nextMeta, projectId);
+    clearScratchDraft(projectId);
 
     return { meta: nextMeta, entry };
   } catch {
@@ -420,28 +528,32 @@ export type CheckoutScratchVersionResult = {
   editors: ScratchEditors;
 };
 
-/** draft 버리고 `currentEntryId` 확정본으로 맞춤 (reset --hard @ HEAD) */
 export async function discardScratchDraftToCurrent(
   meta: ScratchVersionMeta,
+  projectId = getActiveProjectId(),
 ): Promise<CheckoutScratchVersionResult | null> {
   if (!meta.currentEntryId) return null;
   const entry = findVersionEntry(meta, meta.currentEntryId);
   if (!entry) return null;
-  const editors = await loadCommittedDocument(meta, meta.currentEntryId);
+  const editors = await loadCommittedDocument(
+    meta,
+    meta.currentEntryId,
+    projectId,
+  );
   if (!editors) return null;
-  clearScratchDraft();
+  clearScratchDraft(projectId);
   return { meta, entry, editors };
 }
 
-/** 확정 버전으로 checkout — versionLine 변경 없음, draft 삭제 */
 export async function checkoutScratchVersionEntry(
   entryId: string,
+  projectId = getActiveProjectId(),
 ): Promise<CheckoutScratchVersionResult | null> {
-  const meta = readScratchVersionMeta();
+  const meta = readScratchVersionMeta(projectId);
   const entry = findVersionEntry(meta, entryId);
   if (!entry) return null;
 
-  const editors = await getBlobByHash(entry.hash);
+  const editors = await getBlobByHash(projectId, entry.hash);
   if (!editors) return null;
 
   const nextMeta: ScratchVersionMeta = {
@@ -450,8 +562,11 @@ export async function checkoutScratchVersionEntry(
     currentEntryId: entryId,
   };
 
-  writeScratchVersionMeta(nextMeta);
-  clearScratchDraft();
+  writeScratchVersionMeta(nextMeta, projectId);
+  clearScratchDraft(projectId);
 
   return { meta: nextMeta, entry, editors };
 }
+
+/** @deprecated use readScratchVersionMeta after ensureScratchStorageReady */
+export { readScratchVersionMeta };

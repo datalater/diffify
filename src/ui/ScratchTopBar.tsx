@@ -4,6 +4,8 @@ import type {
   ScratchEditors,
   ScratchPersistedContent,
 } from '../lib/scratch-persist';
+import type { ScratchProjectRegistry } from '../lib/scratch-project-registry';
+import { ScratchProjectControls } from './ScratchProjectControls';
 import { ScratchShareMenu } from './ScratchShareMenu';
 import { ScratchVersionControls } from './ScratchVersionControls';
 import type { ScratchVersionMeta } from '../lib/scratch-version-storage';
@@ -23,6 +25,9 @@ export type ScratchTopBarProps = {
   versionControlsDisabled?: boolean;
   onCreateVersion: () => void;
   onSelectVersionValue: (value: string) => void;
+  projectRegistry: ScratchProjectRegistry | null;
+  onSelectProject: (projectId: string) => void;
+  onCreateProject: () => void;
   trailing?: ReactNode;
 };
 
@@ -38,6 +43,9 @@ export function ScratchTopBar({
   versionControlsDisabled,
   onCreateVersion,
   onSelectVersionValue,
+  projectRegistry,
+  onSelectProject,
+  onCreateProject,
   trailing,
 }: ScratchTopBarProps) {
   return (
@@ -46,6 +54,15 @@ export function ScratchTopBar({
         <span className="mr-1 text-sm font-semibold tracking-tight text-[#e6edf3]">
           diffify scratch
         </span>
+
+        {projectRegistry ? (
+          <ScratchProjectControls
+            registry={projectRegistry}
+            disabled={versionControlsDisabled}
+            onSelectProject={onSelectProject}
+            onCreateProject={onCreateProject}
+          />
+        ) : null}
 
         <ScratchShareMenu
           persistContent={persistContent}

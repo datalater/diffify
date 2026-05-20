@@ -15,12 +15,17 @@ import {
   type ScratchPersistSnapshot,
 } from "../lib/scratch-persist";
 import {
+  createScratchProject,
+  ensureScratchProjectsReady,
+  setActiveProjectId,
+  type ScratchProjectRegistry,
+} from "../lib/scratch-project-registry";
+import {
   checkoutScratchVersionEntry,
   commitScratchVersion,
   discardScratchDraftToCurrent,
   isScratchWorkspaceDirty,
   loadScratchWorkspace,
-  readScratchVersionMeta,
   SCRATCH_VERSION_DRAFT_VALUE,
   writeScratchDraft,
   type ScratchVersionMeta,
@@ -148,11 +153,21 @@ function clampHeight(n: number): number {
   return Math.min(PREVIEW_MAX_H, r);
 }
 
+const EMPTY_VERSION_META: ScratchVersionMeta = {
+  v: 1,
+  versionLine: [],
+  currentEntryId: null,
+};
+
 export function ScratchPage() {
   const [hydrated, setHydrated] = useState(false);
-  const [versionMeta, setVersionMeta] = useState<ScratchVersionMeta>(() =>
-    readScratchVersionMeta(),
+  const [projectRegistry, setProjectRegistry] =
+    useState<ScratchProjectRegistry | null>(null);
+  const [activeProjectId, setActiveProjectIdState] = useState<string | null>(
+    null,
   );
+  const [versionMeta, setVersionMeta] =
+    useState<ScratchVersionMeta>(EMPTY_VERSION_META);
   const [versionDirty, setVersionDirty] = useState(false);
   const defaults = defaultScratchSnapshot();
   const [editors, setEditors] = useState<ScratchEditors>(() =>
@@ -183,47 +198,138 @@ export function ScratchPage() {
 
   const documentContent = editors;
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const urlEncoded = new URLSearchParams(window.location.search).get(
-        "state",
-      );
-      const urlSnap = urlEncoded ? await decodeScratchState(urlEncoded) : null;
-
-      const workspace = await loadScratchWorkspace(urlSnap);
-      if (cancelled) return;
-
+  const applyWorkspaceLoad = useCallback(
+    async (
+      projectId: string,
+      workspace: Awaited<ReturnType<typeof loadScratchWorkspace>>,
+      options: { urlSnap: boolean; projectLabel?: string },
+    ) => {
       setEditors(workspace.editors);
       setPreviewDocs(buildPreviewDocs(workspace.editors));
       setShowingSource(workspace.showingSource);
       setVersionMeta(workspace.meta);
+
+      const dirty = await isScratchWorkspaceDirty(
+        workspace.editors,
+        workspace.meta,
+        projectId,
+      );
+      setVersionDirty(dirty);
+
+      const prefix = options.projectLabel
+        ? `「${options.projectLabel}」 — `
+        : "";
+      setStatus(
+        options.urlSnap
+          ? `${prefix}URL \`?state=\`를 draft로 불러왔다. 확정하려면 「버전 생성」을 누른다.`
+          : workspace.hasDraft
+            ? `${prefix}draft를 불러왔다. 확정하려면 「버전 생성」을 누른다.`
+            : workspace.meta.versionLine.length > 0
+              ? `${prefix}마지막 확정 버전을 불러왔다. 편집하면 draft만 갱신된다.`
+              : `${prefix}head·HTML 입력이 미리보기에 반영된다. 편집 후 「버전 생성」으로 확정한다.`,
+      );
+    },
+    [],
+  );
+
+  const loadProjectWorkspace = useCallback(
+    async (
+      projectId: string,
+      urlSnap: ScratchPersistSnapshot | null = null,
+      projectLabel?: string,
+    ) => {
+      const workspace = await loadScratchWorkspace(urlSnap, projectId);
+      await applyWorkspaceLoad(projectId, workspace, {
+        urlSnap: urlSnap !== null,
+        projectLabel,
+      });
+    },
+    [applyWorkspaceLoad],
+  );
+
+  const flushDraftForActiveProject = useCallback(() => {
+    if (!hydrated || !activeProjectId) return;
+    writeScratchDraft(documentContent, activeProjectId);
+    writeScratchShowingSource(showingSource, activeProjectId);
+  }, [hydrated, activeProjectId, documentContent, showingSource]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const registry = await ensureScratchProjectsReady();
+      if (cancelled) return;
+
+      setProjectRegistry(registry);
+      setActiveProjectIdState(registry.activeProjectId);
+
+      const urlEncoded = new URLSearchParams(window.location.search).get(
+        "state",
+      );
+      const urlSnap = urlEncoded
+        ? await decodeScratchState(urlEncoded)
+        : null;
+
+      const project = registry.projects.find(
+        (p) => p.id === registry.activeProjectId,
+      );
+      await loadProjectWorkspace(
+        registry.activeProjectId,
+        urlSnap,
+        project?.name,
+      );
+      if (cancelled) return;
+
       const { previewWidth: w, previewHeight: h } =
         defaultScratchPreviewDimensions();
       setPreviewWidth(clampWidth(w));
       setPreviewHeight(clampHeight(h));
       setHydrated(true);
-
-      const dirty = await isScratchWorkspaceDirty(
-        workspace.editors,
-        workspace.meta,
-      );
-      if (!cancelled) setVersionDirty(dirty);
-
-      setStatus(
-        urlSnap
-          ? "URL `?state=`를 draft로 불러왔다. 확정하려면 「버전 생성」을 누른다."
-          : workspace.hasDraft
-            ? "draft를 불러왔다. 확정하려면 「버전 생성」을 누른다."
-            : workspace.meta.versionLine.length > 0
-              ? "마지막 확정 버전을 불러왔다. 편집하면 draft만 갱신된다."
-              : "head·HTML 입력이 미리보기에 반영된다. 편집 후 「버전 생성」으로 확정한다.",
-      );
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadProjectWorkspace]);
+
+  const handleSelectProject = useCallback(
+    async (projectId: string) => {
+      if (!projectRegistry || projectId === activeProjectId) return;
+
+      flushDraftForActiveProject();
+      const next = setActiveProjectId(projectId);
+      setProjectRegistry(next);
+      setActiveProjectIdState(projectId);
+      setHydrated(false);
+
+      const project = next.projects.find((p) => p.id === projectId);
+      await loadProjectWorkspace(projectId, null, project?.name);
+      setHydrated(true);
+      setStatus(`프로젝트를 「${project?.name ?? ""}」(으)로 전환했다.`);
+    },
+    [
+      projectRegistry,
+      activeProjectId,
+      flushDraftForActiveProject,
+      loadProjectWorkspace,
+    ],
+  );
+
+  const handleCreateProject = useCallback(async () => {
+    if (!projectRegistry) return;
+
+    const name = window.prompt("프로젝트 이름 (비우면 자동 번호)", "");
+    if (name === null) return;
+
+    flushDraftForActiveProject();
+    const next = createScratchProject(name);
+    setProjectRegistry(next);
+    setActiveProjectIdState(next.activeProjectId);
+    setHydrated(false);
+
+    const project = next.projects.find((p) => p.id === next.activeProjectId);
+    await loadProjectWorkspace(next.activeProjectId, null, project?.name);
+    setHydrated(true);
+    setStatus(`새 프로젝트 「${project?.name ?? ""}」를 만들었다.`);
+  }, [projectRegistry, flushDraftForActiveProject, loadProjectWorkspace]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -233,31 +339,39 @@ export function ScratchPage() {
   }, [editors]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !activeProjectId) return;
     const timer = window.setTimeout(() => {
-      writeScratchDraft(documentContent);
+      writeScratchDraft(documentContent, activeProjectId);
     }, DRAFT_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [hydrated, documentContent]);
+  }, [hydrated, activeProjectId, documentContent]);
 
   useEffect(() => {
-    if (!hydrated) return;
-    writeScratchShowingSource(showingSource);
-  }, [hydrated, showingSource]);
+    if (!hydrated || !activeProjectId) return;
+    writeScratchShowingSource(showingSource, activeProjectId);
+  }, [hydrated, activeProjectId, showingSource]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !activeProjectId) return;
     let cancelled = false;
-    void isScratchWorkspaceDirty(documentContent, versionMeta).then((dirty) => {
+    void isScratchWorkspaceDirty(
+      documentContent,
+      versionMeta,
+      activeProjectId,
+    ).then((dirty) => {
       if (!cancelled) setVersionDirty(dirty);
     });
     return () => {
       cancelled = true;
     };
-  }, [hydrated, documentContent, versionMeta]);
+  }, [hydrated, activeProjectId, documentContent, versionMeta]);
 
   const handleCreateVersion = useCallback(async () => {
-    const result = await commitScratchVersion(documentContent);
+    if (!activeProjectId) return;
+    const result = await commitScratchVersion(
+      documentContent,
+      activeProjectId,
+    );
     if (!result) {
       setStatus("버전을 저장하지 못했다 (IndexedDB·용량).");
       return;
@@ -265,10 +379,11 @@ export function ScratchPage() {
     setVersionMeta(result.meta);
     setVersionDirty(false);
     setStatus(`「${result.entry.label}」 버전을 확정했다.`);
-  }, [documentContent]);
+  }, [documentContent, activeProjectId]);
 
   const handleSelectVersionValue = useCallback(
     async (value: string) => {
+      if (!activeProjectId) return;
       if (value === SCRATCH_VERSION_DRAFT_VALUE) return;
 
       if (!versionDirty && value === versionMeta.currentEntryId) {
@@ -277,8 +392,8 @@ export function ScratchPage() {
 
       const result =
         versionDirty && value === versionMeta.currentEntryId
-          ? await discardScratchDraftToCurrent(versionMeta)
-          : await checkoutScratchVersionEntry(value);
+          ? await discardScratchDraftToCurrent(versionMeta, activeProjectId)
+          : await checkoutScratchVersionEntry(value, activeProjectId);
 
       if (!result) {
         setStatus("버전을 불러오지 못했다.");
@@ -297,7 +412,7 @@ export function ScratchPage() {
           : `「${result.entry.label}」로 reset했다 (draft·타임라인 변경 없음).`,
       );
     },
-    [versionMeta, versionDirty],
+    [versionMeta, versionDirty, activeProjectId],
   );
 
   useEffect(() => {
@@ -372,7 +487,7 @@ export function ScratchPage() {
     }
     if (result.reason === "too_long") {
       setStatus(
-        "?state= 값이 12,000자를 넘어 URL 복사가 불가능하다. 내보내기·localStorage를 사용한다.",
+        "?state= 값이 12,000자를 넘어 URL 복사가 불가능하다. 보내기·localStorage를 사용한다.",
       );
       return;
     }
@@ -425,6 +540,9 @@ export function ScratchPage() {
         versionControlsDisabled={!hydrated}
         onCreateVersion={() => void handleCreateVersion()}
         onSelectVersionValue={(value) => void handleSelectVersionValue(value)}
+        projectRegistry={projectRegistry}
+        onSelectProject={(id) => void handleSelectProject(id)}
+        onCreateProject={() => void handleCreateProject()}
       />
 
       <ScratchEditorPaneBar
