@@ -1,25 +1,4 @@
-export type ScratchPaneId = 'source' | 'result' | 'preview';
-
-export type ScratchPaneVisibility = {
-  source: boolean;
-  result: boolean;
-  preview: boolean;
-};
-
-/** @deprecated Use ScratchPaneVisibility */
-export type EditorPaneVisibility = ScratchPaneVisibility;
-
-/** @deprecated Use ScratchPaneId */
-export type EditorPaneId = 'source' | 'result';
-
-export const DEFAULT_SCRATCH_PANE_VISIBILITY: ScratchPaneVisibility = {
-  source: true,
-  result: true,
-  preview: true,
-};
-
-/** @deprecated Use DEFAULT_SCRATCH_PANE_VISIBILITY */
-export const DEFAULT_EDITOR_PANE_VISIBILITY = DEFAULT_SCRATCH_PANE_VISIBILITY;
+import type { ScratchPaneId, ScratchPaneVisibility } from './scratch-pane-visibility';
 
 const PANE_TOGGLE_STYLE: Record<
   ScratchPaneId,
@@ -38,22 +17,6 @@ const PANE_LABEL: Record<ScratchPaneId, string> = {
 
 const TOGGLE_BTN_CLASS =
   'cursor-pointer px-2.5 py-1 text-[11px] font-medium leading-tight transition focus:outline-none focus-visible:ring-1 focus-visible:ring-sky-400';
-
-export function countVisibleScratchPanes(
-  visibility: ScratchPaneVisibility,
-): number {
-  return (
-    (visibility.source ? 1 : 0) +
-    (visibility.result ? 1 : 0) +
-    (visibility.preview ? 1 : 0)
-  );
-}
-
-export function countVisibleEditorPanes(
-  visibility: ScratchPaneVisibility,
-): number {
-  return (visibility.source ? 1 : 0) + (visibility.result ? 1 : 0);
-}
 
 export function ScratchPaneEmptyState() {
   return (

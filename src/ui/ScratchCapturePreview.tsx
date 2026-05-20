@@ -198,18 +198,7 @@ function ScratchCaptureStage({
   );
 }
 
-export function ScratchComparePreview({
-  substrate,
-  captureViewMode,
-  compareResult,
-  showingSource,
-  sourceDoc,
-  resultDoc,
-  width,
-  fallbackHeight,
-  dualSubstrate,
-  onLiveBoxMeasured,
-}: {
+type ScratchComparePreviewProps = {
   substrate: ScratchPreviewSubstrate;
   captureViewMode: ScratchCaptureViewMode;
   compareResult: ScratchCompareResult | null;
@@ -218,22 +207,48 @@ export function ScratchComparePreview({
   resultDoc: string;
   width: number;
   fallbackHeight: number;
-  dualSubstrate?: boolean;
   onLiveBoxMeasured?: (size: PreviewLiveMeasured) => void;
-}) {
-  if (!dualSubstrate) {
-    return (
-      <DiffifyLiveOverlay
-        sourceDoc={sourceDoc}
-        resultDoc={resultDoc}
-        width={width}
-        fallbackHeight={fallbackHeight}
-        showingSource={showingSource}
-        onLiveBoxMeasured={onLiveBoxMeasured}
-      />
-    );
-  }
+};
 
+function ScratchComparePreviewSingle({
+  sourceDoc,
+  resultDoc,
+  width,
+  fallbackHeight,
+  showingSource,
+  onLiveBoxMeasured,
+}: Pick<
+  ScratchComparePreviewProps,
+  | 'sourceDoc'
+  | 'resultDoc'
+  | 'width'
+  | 'fallbackHeight'
+  | 'showingSource'
+  | 'onLiveBoxMeasured'
+>) {
+  return (
+    <DiffifyLiveOverlay
+      sourceDoc={sourceDoc}
+      resultDoc={resultDoc}
+      width={width}
+      fallbackHeight={fallbackHeight}
+      showingSource={showingSource}
+      onLiveBoxMeasured={onLiveBoxMeasured}
+    />
+  );
+}
+
+function ScratchComparePreviewDual({
+  substrate,
+  captureViewMode,
+  compareResult,
+  showingSource,
+  sourceDoc,
+  resultDoc,
+  width,
+  fallbackHeight,
+  onLiveBoxMeasured,
+}: ScratchComparePreviewProps) {
   const codeFallbackOuter =
     ARTBOARD_MAT_VERTICAL_PAD_PX + Math.max(fallbackHeight, 80);
 
@@ -281,4 +296,14 @@ export function ScratchComparePreview({
       </PreviewStackLayer>
     </div>
   );
+}
+
+export function ScratchComparePreview({
+  dualSubstrate,
+  ...props
+}: ScratchComparePreviewProps & { dualSubstrate?: boolean }) {
+  if (!dualSubstrate) {
+    return <ScratchComparePreviewSingle {...props} />;
+  }
+  return <ScratchComparePreviewDual {...props} />;
 }

@@ -47,6 +47,13 @@ export type ExportScratchHtmlResult =
   | { ok: true; fileName: string }
   | { ok: false; reason: 'aborted' | 'failed' };
 
+export function exportScratchHtmlFailureReason(
+  result: ExportScratchHtmlResult,
+): 'aborted' | 'failed' | undefined {
+  if (result.ok) return undefined;
+  return result.reason;
+}
+
 export async function exportScratchHtmlFile(
   layer: ScratchHtmlLayer,
   head: string,

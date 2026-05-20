@@ -70,15 +70,14 @@ import {
   ScratchEditorColumn,
   SCRATCH_ACTION_BTN_CLASS,
 } from "./ScratchEditorColumn";
+import { ScratchEditorPaneBar, ScratchPaneEmptyState } from "./ScratchEditorPaneBar";
 import {
   countVisibleEditorPanes,
   countVisibleScratchPanes,
   DEFAULT_SCRATCH_PANE_VISIBILITY,
-  ScratchEditorPaneBar,
-  ScratchPaneEmptyState,
   type ScratchPaneId,
   type ScratchPaneVisibility,
-} from "./ScratchEditorPaneBar";
+} from "./scratch-pane-visibility";
 import { ScratchTopBar } from "./ScratchTopBar";
 
 const LIVE_PREVIEW_DEBOUNCE_MS = 200;
@@ -304,9 +303,9 @@ export function ScratchPage() {
     if (!isDevCompare || !hydrated || !activeProjectId) return;
 
     let cancelled = false;
-    setIsLoadingLatestCompare(true);
 
     void (async () => {
+      setIsLoadingLatestCompare(true);
       try {
         const payload = await fetchLatestScratchCompare(
           activeProjectId,
@@ -587,17 +586,20 @@ export function ScratchPage() {
     setStatus("Result HTML을 포맷했다.");
   }, []);
 
-  useEffect(() => {
-    if (previewWidthMode.kind !== "fit" || previewMeasured === null) return;
-    const next = clampWidth(previewMeasured.contentWidth);
-    if (next !== previewWidth) setPreviewWidth(next);
-  }, [previewWidthMode, previewMeasured, previewWidth]);
-
-  useEffect(() => {
-    if (previewHeightMode.kind !== "fit" || previewMeasured === null) return;
-    const next = clampHeight(previewMeasured.contentHeight);
-    if (next !== previewHeight) setPreviewHeight(next);
-  }, [previewHeightMode, previewMeasured, previewHeight]);
+  const handleLiveBoxMeasured = useCallback(
+    (size: PreviewLiveMeasured) => {
+      setPreviewMeasured(size);
+      if (previewWidthMode.kind === "fit") {
+        const next = clampWidth(size.contentWidth);
+        setPreviewWidth((prev) => (prev === next ? prev : next));
+      }
+      if (previewHeightMode.kind === "fit") {
+        const next = clampHeight(size.contentHeight);
+        setPreviewHeight((prev) => (prev === next ? prev : next));
+      }
+    },
+    [previewWidthMode, previewHeightMode],
+  );
 
   const handleSelectBreakpointWidth = useCallback((width: number) => {
     const w = clampWidth(width);
@@ -890,7 +892,7 @@ export function ScratchPage() {
                   resultDoc={previewDocs.result}
                   width={previewWidth}
                   fallbackHeight={previewHeight}
-                  onLiveBoxMeasured={setPreviewMeasured}
+                  onLiveBoxMeasured={handleLiveBoxMeasured}
                 />
               </div>
               {isDevCompare ? (

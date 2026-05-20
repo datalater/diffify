@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type SyntheticEvent,
@@ -51,10 +52,18 @@ export function DiffifyLiveOverlay({
   const [sizeResult, setSizeResult] = useState<IframeContentSize | null>(null);
   const sourceFrameRef = useRef<HTMLIFrameElement | null>(null);
   const resultFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const [trackedDocs, setTrackedDocs] = useState({ sourceDoc, resultDoc });
 
-  useEffect(() => {
+  if (
+    sourceDoc !== trackedDocs.sourceDoc ||
+    resultDoc !== trackedDocs.resultDoc
+  ) {
+    setTrackedDocs({ sourceDoc, resultDoc });
     setSizeSource(null);
     setSizeResult(null);
+  }
+
+  useLayoutEffect(() => {
     sourceFrameRef.current = null;
     resultFrameRef.current = null;
   }, [sourceDoc, resultDoc]);

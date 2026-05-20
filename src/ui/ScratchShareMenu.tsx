@@ -1,29 +1,36 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  exportScratchHtmlFailureReason,
   exportScratchHtmlFile,
   pickScratchHtmlFile,
   readScratchHtmlFile,
   type ScratchHtmlLayer,
-} from '../lib/scratch-html-io';
+} from "../lib/scratch-html-io";
 import {
   isScratchStateTooLongForUrl,
   MAX_URL_STATE_CHARS,
   type ScratchEditors,
   type ScratchPersistedContent,
-} from '../lib/scratch-persist';
+} from "../lib/scratch-persist";
 import {
   NavMenuChevron,
   NAV_MENU_TRIGGER_CLASS,
   ScratchNavPopover,
-} from './ScratchNavPopover';
-import { settleSubmenuInViewport } from './popover-viewport';
+} from "./ScratchNavPopover";
+import { settleSubmenuInViewport } from "./popover-viewport";
 import {
   NAV_MENU_ITEM_CLASS,
   NAV_SUBMENU_ITEM_CLASS,
   NAV_SUBMENU_PANEL_BASE_CLASS,
-} from './scratch-github-ui';
+} from "./scratch-github-ui";
 
-const SHARE_PANEL_CLASS = 'min-w-[11rem] px-1 py-1 font-sans';
+const SHARE_PANEL_CLASS = "min-w-[11rem] px-1 py-1 font-sans";
 
 const URL_COPY_DISABLED_TITLE = `인코딩된 URL의 ?state= 값이 최대 ${MAX_URL_STATE_CHARS.toLocaleString()}자를 넘어 공유할 수 없습니다. (브라우저 전체 URL 길이 한도가 아닌, gzip·base64로 인코딩한 state 파라미터 값 기준)`;
 
@@ -56,7 +63,7 @@ export function ScratchShareMenu({
   }, [persistContent]);
 
   const layerParts = (layer: ScratchHtmlLayer) =>
-    layer === 'source'
+    layer === "source"
       ? { head: editors.sourceHead, html: editors.sourceHtml }
       : { head: editors.resultHead, html: editors.resultHtml };
 
@@ -65,29 +72,30 @@ export function ScratchShareMenu({
     const result = await exportScratchHtmlFile(layer, head, html);
     if (result.ok) {
       onNotify(
-        `${layer === 'source' ? 'Source' : 'Result'}를 ${result.fileName}으로 보냈다.`,
+        `${layer === "source" ? "Source" : "Result"}를 ${result.fileName}으로 보냈다.`,
       );
       return;
     }
-    if (result.reason === 'aborted') return;
-    onNotify('파일보내기에 실패했다.');
+    const failureReason = exportScratchHtmlFailureReason(result);
+    if (failureReason === "aborted") return;
+    onNotify("파일보내기에 실패했다.");
   };
 
   const handleImport = async (layer: ScratchHtmlLayer) => {
     const file = await pickScratchHtmlFile();
     if (!file) return;
     if (!/\.html?$/i.test(file.name)) {
-      onNotify('HTML(.html) 파일만 가져올 수 있다.');
+      onNotify("HTML(.html) 파일만 가져올 수 있다.");
       return;
     }
     const parts = await readScratchHtmlFile(file);
     if (!parts) {
-      onNotify('HTML 파일을 읽지 못했다.');
+      onNotify("HTML 파일을 읽지 못했다.");
       return;
     }
     onImportLayer(layer, parts);
     onNotify(
-      `${layer === 'source' ? 'Source' : 'Result'}에 ${file.name}을 반영했다 (<head>·body 분리).`,
+      `${layer === "source" ? "Source" : "Result"}에 ${file.name}을 반영했다 (<head>·body 분리).`,
     );
   };
 
@@ -118,7 +126,7 @@ export function ScratchShareMenu({
           title={
             urlCopyDisabled
               ? URL_COPY_DISABLED_TITLE
-              : '현재 입력을 ?state= URL로 클립보드에 복사'
+              : "현재 입력을 ?state= URL로 클립보드에 복사"
           }
           onClick={() => void onCopyShareUrl()}
           className={NAV_MENU_ITEM_CLASS}
@@ -142,16 +150,16 @@ export function ScratchShareMenu({
 
 function useHoverSubmenuEnabled(): boolean {
   const [enabled, setEnabled] = useState(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    typeof window !== "undefined"
+      ? window.matchMedia("(hover: hover) and (pointer: fine)").matches
       : false,
   );
 
   useEffect(() => {
-    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const mq = window.matchMedia("(hover: hover) and (pointer: fine)");
     const onChange = () => setEnabled(mq.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   return enabled;
@@ -162,12 +170,12 @@ const SUBMENU_CLOSE_DELAY_MS = 120;
 function ShareFlyoutMenu({
   label,
   onSelect,
-  submenuExpand = 'end',
+  submenuExpand = "end",
 }: {
   label: string;
   onSelect: (layer: ScratchHtmlLayer) => void;
   /** end = 오른쪽(left-full), start = 왼쪽(right-full) — 공유 패널은 start 권장 */
-  submenuExpand?: 'end' | 'start';
+  submenuExpand?: "end" | "start";
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -205,20 +213,28 @@ function ShareFlyoutMenu({
       if (rootRef.current?.contains(event.target as Node)) return;
       setOpen(false);
     };
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [open]);
 
   useLayoutEffect(() => {
     if (!open || !submenuRef.current) return;
     const submenu = submenuRef.current;
-    settleSubmenuInViewport(submenu, NAV_SUBMENU_PANEL_BASE_CLASS, submenuExpand);
+    settleSubmenuInViewport(
+      submenu,
+      NAV_SUBMENU_PANEL_BASE_CLASS,
+      submenuExpand,
+    );
 
     const onResize = () => {
-      settleSubmenuInViewport(submenu, NAV_SUBMENU_PANEL_BASE_CLASS, submenuExpand);
+      settleSubmenuInViewport(
+        submenu,
+        NAV_SUBMENU_PANEL_BASE_CLASS,
+        submenuExpand,
+      );
     };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, [open, submenuExpand]);
 
   return (
@@ -243,7 +259,7 @@ function ShareFlyoutMenu({
         }}
         aria-expanded={open}
         aria-haspopup="menu"
-          className={`${NAV_MENU_ITEM_CLASS} flex items-center justify-between gap-3`}
+        className={`${NAV_MENU_ITEM_CLASS} flex items-center justify-between gap-3`}
       >
         {label}
         <span className="text-[#8b949e]" aria-hidden>
@@ -261,7 +277,7 @@ function ShareFlyoutMenu({
             role="menuitem"
             className={NAV_SUBMENU_ITEM_CLASS}
             onClick={() => {
-              onSelect('source');
+              onSelect("source");
               setOpen(false);
             }}
           >
@@ -272,7 +288,7 @@ function ShareFlyoutMenu({
             role="menuitem"
             className={NAV_SUBMENU_ITEM_CLASS}
             onClick={() => {
-              onSelect('result');
+              onSelect("result");
               setOpen(false);
             }}
           >

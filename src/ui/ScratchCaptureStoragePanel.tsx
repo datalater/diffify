@@ -39,7 +39,9 @@ export function ScratchCaptureStoragePanel({
   }, []);
 
   useEffect(() => {
-    void refresh();
+    queueMicrotask(() => {
+      void refresh();
+    });
   }, [refresh, refreshToken]);
 
   const handleClear = async () => {
