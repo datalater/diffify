@@ -31,8 +31,21 @@ import {
   type ScratchVersionMeta,
 } from "../lib/scratch-version-storage";
 import { writeScratchShowingSource } from "../lib/scratch-ui-state";
+import {
+  installScratchCompareBrowsers,
+  postScratchCompare,
+  fetchLatestScratchCompare,
+  scratchViewportKey,
+} from "../lib/scratch-compare-api";
+import type {
+  ScratchCompareFeatureMode,
+  ScratchCompareResult,
+  ScratchOverlayStackMode,
+} from "../lib/scratch-compare-types";
 import type { ScratchHtmlLayer } from "../lib/scratch-html-io";
-import { DiffifyLiveOverlay } from "./DiffifyLiveOverlay";
+import { ScratchCaptureStoragePanel } from "./ScratchCaptureStoragePanel";
+import { ScratchComparePreview } from "./ScratchCapturePreview";
+import { ScratchDevCompareBar } from "./ScratchDevCompareBar";
 import { ScratchFullDocumentDialog } from "./ScratchFullDocumentDialog";
 import { PreviewDeviceToolbar } from "./PreviewDeviceToolbar";
 import {
@@ -191,6 +204,24 @@ export function ScratchPage() {
   );
   const [headExamplesOpen, setHeadExamplesOpen] = useState(false);
 
+  const isDevCompare = import.meta.env.DEV;
+  const viewportKey = useMemo(
+    () => scratchViewportKey(previewWidth, previewHeight),
+    [previewWidth, previewHeight],
+  );
+  const [compareResult, setCompareResult] = useState<ScratchCompareResult | null>(
+    null,
+  );
+  const [isComparing, setIsComparing] = useState(false);
+  const [isLoadingLatestCompare, setIsLoadingLatestCompare] = useState(false);
+  const [featureMode, setFeatureMode] =
+    useState<ScratchCompareFeatureMode>("overlay");
+  const [overlayStackMode, setOverlayStackMode] =
+    useState<ScratchOverlayStackMode>("live");
+  const [storageRefreshToken, setStorageRefreshToken] = useState(0);
+  const [showInstallBrowsers, setShowInstallBrowsers] = useState(false);
+  const [isInstallingBrowsers, setIsInstallingBrowsers] = useState(false);
+
   const persistContent = useMemo(
     () => scratchPersistedContentFromEditors(editors, showingSource),
     [editors, showingSource],
@@ -289,6 +320,99 @@ export function ScratchPage() {
       cancelled = true;
     };
   }, [loadProjectWorkspace]);
+
+  useEffect(() => {
+    if (!isDevCompare || !hydrated || !activeProjectId) return;
+
+    let cancelled = false;
+    setIsLoadingLatestCompare(true);
+
+    void (async () => {
+      try {
+        const payload = await fetchLatestScratchCompare(
+          activeProjectId,
+          viewportKey,
+        );
+        if (cancelled) return;
+        if (!payload.found) {
+          setCompareResult(null);
+          return;
+        }
+        setCompareResult(payload);
+        setStatus(
+          `저장된 캡처를 불러왔다 (run ${payload.runId}). 새로 만들려면 「새로 캡처」.`,
+        );
+      } catch {
+        if (!cancelled) {
+          setCompareResult(null);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingLatestCompare(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDevCompare, hydrated, activeProjectId, viewportKey]);
+
+  const handleCompareNow = useCallback(async () => {
+    if (!activeProjectId || !hydrated) return;
+
+    setIsComparing(true);
+    setShowInstallBrowsers(false);
+    try {
+      const payload = await postScratchCompare({
+        projectId: activeProjectId,
+        viewportKey,
+        width: previewWidth,
+        height: previewHeight,
+        sourceDocument: previewDocs.source,
+        resultDocument: previewDocs.result,
+      });
+      setCompareResult(payload);
+      setFeatureMode("overlay");
+      setOverlayStackMode("capture");
+      setStorageRefreshToken((t) => t + 1);
+      setStatus(
+        payload.pixelDiff.diffPixels === 0
+          ? `캡처 완료 (run ${payload.runId}). pixel-perfect.`
+          : `캡처 완료 (run ${payload.runId}). ${payload.pixelDiff.diffPercent}% 차이.`,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "캡처에 실패했다.";
+      setStatus(message);
+      if (/launch a browser|playwright install/i.test(message)) {
+        setShowInstallBrowsers(true);
+      }
+    } finally {
+      setIsComparing(false);
+    }
+  }, [
+    activeProjectId,
+    hydrated,
+    viewportKey,
+    previewWidth,
+    previewHeight,
+    previewDocs.source,
+    previewDocs.result,
+  ]);
+
+  const handleInstallBrowsers = useCallback(async () => {
+    setIsInstallingBrowsers(true);
+    try {
+      const result = await installScratchCompareBrowsers();
+      setStatus(result.message);
+      setShowInstallBrowsers(!result.ok);
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "브라우저 설치에 실패했다.",
+      );
+    } finally {
+      setIsInstallingBrowsers(false);
+    }
+  }, []);
 
   const handleSelectProject = useCallback(
     async (projectId: string) => {
@@ -428,13 +552,31 @@ export function ScratchPage() {
         return;
       }
       if (event.code === "Space" || event.code === "KeyD") {
+        if (isDevCompare && featureMode !== "overlay") return;
         event.preventDefault();
         setShowingSource((prev) => !prev);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [paneVisibility.preview]);
+  }, [paneVisibility.preview, isDevCompare, featureMode]);
+
+  const diffMetricsText =
+    compareResult?.pixelDiff == null
+      ? null
+      : compareResult.pixelDiff.diffPixels === 0
+        ? "pixel-perfect"
+        : `${compareResult.pixelDiff.diffPercent}% · ${compareResult.pixelDiff.diffPixels.toLocaleString()} px`;
+
+  const comparePreviewHint =
+    isDevCompare && featureMode === "pixel-diff"
+      ? "픽셀 diff — 빨간 영역이 차이."
+      : isDevCompare &&
+          compareResult &&
+          featureMode === "overlay" &&
+          overlayStackMode === "capture"
+        ? "캡처 오버레이 — Space/D로 Source·Result 전환.「라이브」로 iframe."
+        : "Space/D 또는 칩 클릭으로 Source·Result 전환 (iframe 유지).";
 
   const formatSourceHead = useCallback(() => {
     setEditors((prev) => ({
@@ -543,6 +685,25 @@ export function ScratchPage() {
         projectRegistry={projectRegistry}
         onSelectProject={(id) => void handleSelectProject(id)}
         onCreateProject={() => void handleCreateProject()}
+        trailing={
+          isDevCompare ? (
+            <ScratchDevCompareBar
+              disabled={!hydrated || !activeProjectId}
+              isComparing={isComparing}
+              isLoadingLatest={isLoadingLatestCompare}
+              hasCompareResult={Boolean(compareResult)}
+              featureMode={featureMode}
+              overlayStackMode={overlayStackMode}
+              diffMetricsText={diffMetricsText}
+              onCompare={() => void handleCompareNow()}
+              onFeatureModeChange={setFeatureMode}
+              onOverlayStackModeChange={setOverlayStackMode}
+              showInstallBrowsers={showInstallBrowsers}
+              isInstallingBrowsers={isInstallingBrowsers}
+              onInstallBrowsers={() => void handleInstallBrowsers()}
+            />
+          ) : null
+        }
       />
 
       <ScratchEditorPaneBar
@@ -618,9 +779,7 @@ export function ScratchPage() {
                     setShowingSource(layer === "source")
                   }
                 />
-                <span>
-                  Space/D 또는 칩 클릭으로 Source·Result 전환 (iframe 유지).
-                </span>
+                <span>{comparePreviewHint}</span>
               </p>
               <div className="inline-flex max-w-full flex-col items-stretch overflow-hidden rounded-md shadow-sm ring-1 ring-slate-300/90">
                 <PreviewDeviceToolbar
@@ -636,12 +795,17 @@ export function ScratchPage() {
                   onResetPreviewSize={resetPreviewSize}
                   previewMeasured={previewMeasured}
                 />
-                <DiffifyLiveOverlay
+                <ScratchComparePreview
+                  mode={isDevCompare ? featureMode : "overlay"}
+                  compareResult={isDevCompare ? compareResult : null}
+                  showingSource={showingSource}
+                  overlayStackMode={
+                    isDevCompare ? overlayStackMode : "live"
+                  }
                   sourceDoc={previewDocs.source}
                   resultDoc={previewDocs.result}
                   width={previewWidth}
                   fallbackHeight={previewHeight}
-                  showingSource={showingSource}
                   onLiveBoxMeasured={setPreviewMeasured}
                 />
               </div>
@@ -649,6 +813,17 @@ export function ScratchPage() {
           </section>
         ) : null}
       </div>
+
+      {isDevCompare ? (
+        <ScratchCaptureStoragePanel
+          refreshToken={storageRefreshToken}
+          compareBusy={isComparing || isLoadingLatestCompare}
+          onNotify={setStatus}
+          onCleared={() => {
+            setCompareResult(null);
+          }}
+        />
+      ) : null}
 
       <ScratchFullDocumentDialog
         open={headExamplesOpen}

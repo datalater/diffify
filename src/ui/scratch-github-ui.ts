@@ -6,6 +6,25 @@ export const GITHUB_CANVAS = '#161b22';
 export const GITHUB_TOOLBAR_GROUP_CLASS =
   'inline-flex h-8 items-stretch overflow-hidden rounded-md border border-[#30363d] bg-[#21262d] font-sans text-xs shadow-sm';
 
+/** 로컬 캡처 바 — 버튼·셀렉트가 bar 높이를 꽉 채움 */
+export const GITHUB_COMPARE_BAR_CLASS =
+  'inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-md border border-[#30363d] bg-[#21262d] font-sans text-xs shadow-sm';
+
+export const GITHUB_COMPARE_SEGMENT_CLASS =
+  'inline-flex shrink-0 items-center border-r border-[#30363d] px-2.5';
+
+export const GITHUB_COMPARE_SELECT_WRAP_CLASS =
+  'relative flex h-full min-w-[6.5rem] shrink-0 items-center border-r border-[#30363d]';
+
+export const GITHUB_COMPARE_SELECT_CLASS =
+  'h-full w-full min-w-0 cursor-pointer appearance-none bg-transparent py-0 pl-2.5 pr-7 text-xs font-medium text-[#e6edf3] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#388bfd]';
+
+export const GITHUB_COMPARE_CAPTURE_BTN_CLASS =
+  'inline-flex h-full shrink-0 items-center border-r border-[#30363d] bg-[#238636] px-3 font-medium text-white transition-colors hover:bg-[#2ea043] focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#388bfd] disabled:cursor-not-allowed disabled:bg-[#21262d] disabled:text-[#484f58] disabled:hover:bg-[#21262d]';
+
+export const GITHUB_COMPARE_METRICS_CLASS =
+  'inline-flex shrink-0 items-center px-2.5 font-mono text-[11px] font-semibold text-[#d29922] bg-[#bb800926]';
+
 export const GITHUB_BTN_CLASS =
   'inline-flex items-center px-3 font-medium text-[#e6edf3] transition-colors hover:bg-[#30363d] focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#388bfd] disabled:cursor-not-allowed disabled:text-[#484f58] disabled:hover:bg-transparent';
 

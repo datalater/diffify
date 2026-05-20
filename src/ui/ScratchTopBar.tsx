@@ -50,7 +50,7 @@ export function ScratchTopBar({
 }: ScratchTopBarProps) {
   return (
     <nav className="border-b border-[#30363d] bg-[#161b22] font-sans text-[13px] text-[#e6edf3]">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2 min-h-[2.75rem]">
         <span className="mr-1 text-sm font-semibold tracking-tight text-[#e6edf3]">
           diffify scratch
         </span>
