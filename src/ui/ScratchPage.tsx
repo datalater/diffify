@@ -189,9 +189,7 @@ export function ScratchPage() {
       const urlEncoded = new URLSearchParams(window.location.search).get(
         "state",
       );
-      const urlSnap = urlEncoded
-        ? await decodeScratchState(urlEncoded)
-        : null;
+      const urlSnap = urlEncoded ? await decodeScratchState(urlEncoded) : null;
 
       const workspace = await loadScratchWorkspace(urlSnap);
       if (cancelled) return;
@@ -374,7 +372,7 @@ export function ScratchPage() {
     }
     if (result.reason === "too_long") {
       setStatus(
-        "?state= 값이 12,000자를 넘어 URL 복사가 불가능하다. 보내기·localStorage를 사용한다.",
+        "?state= 값이 12,000자를 넘어 URL 복사가 불가능하다. 내보내기·localStorage를 사용한다.",
       );
       return;
     }
