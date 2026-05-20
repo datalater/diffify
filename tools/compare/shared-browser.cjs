@@ -2,6 +2,7 @@ const { constants } = require('node:fs');
 const { access } = require('node:fs/promises');
 const { spawn } = require('node:child_process');
 const { chromium } = require('playwright');
+const { getCaptureDeviceScaleFactor } = require('./capture-scale.cjs');
 
 const SYSTEM_BROWSER_CANDIDATES = [
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
@@ -69,8 +70,13 @@ async function launchDiffifyBrowser() {
  * @returns {Promise<{ ok: boolean; message: string }>}
  */
 async function checkBrowserHealth() {
+  const captureDeviceScaleFactor = getCaptureDeviceScaleFactor();
   if (cachedBrowserOk === true) {
-    return { ok: true, message: 'Browser ready (cached).' };
+    return {
+      ok: true,
+      message: 'Browser ready (cached).',
+      captureDeviceScaleFactor,
+    };
   }
 
   let browser = null;
@@ -78,13 +84,14 @@ async function checkBrowserHealth() {
     browser = await launchDiffifyBrowser();
     await browser.close();
     cachedBrowserOk = true;
-    return { ok: true, message: 'Browser ready.' };
+    return { ok: true, message: 'Browser ready.', captureDeviceScaleFactor };
   } catch (error) {
     cachedBrowserOk = false;
     return {
       ok: false,
       message:
         error instanceof Error ? error.message : 'Browser check failed.',
+      captureDeviceScaleFactor,
     };
   }
 }
@@ -144,4 +151,5 @@ module.exports = {
   checkBrowserHealth,
   installPlaywrightChromium,
   invalidateBrowserHealthCache,
+  getCaptureDeviceScaleFactor,
 };

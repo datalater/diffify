@@ -3,6 +3,7 @@ const { mkdir, readFile, writeFile } = require('node:fs/promises');
 const { PNG } = require('pngjs');
 const blazediff = require('@blazediff/core');
 const { diffifyOutputRoot } = require('./paths.cjs');
+const { getCaptureDeviceScaleFactor } = require('./capture-scale.cjs');
 const { launchDiffifyBrowser } = require('./shared-browser.cjs');
 
 const TARGET_SELECTOR = '[data-diffify-target]';
@@ -49,6 +50,9 @@ async function captureDocument(page, fullHtml, viewport, imagePath) {
   });
   await page.setContent(fullHtml, { waitUntil: 'networkidle' });
   await page.waitForTimeout(WAIT_AFTER_CONTENT_MS);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
 
   const locator = page.locator(TARGET_SELECTOR).first();
   await locator.waitFor({ state: 'visible', timeout: 15000 });
@@ -140,8 +144,10 @@ async function runScratchCompare(input) {
     summaryFile: path.join(outputDir, 'summary.json'),
   };
 
+  const deviceScaleFactor = getCaptureDeviceScaleFactor();
   const browser = await launchDiffifyBrowser();
-  const page = await browser.newPage();
+  const context = await browser.newContext({ deviceScaleFactor });
+  const page = await context.newPage();
 
   try {
     await captureDocument(page, sourceDocument, viewport, paths.sourceImageFile);
@@ -156,6 +162,7 @@ async function runScratchCompare(input) {
       runId,
       outputDir,
       viewport,
+      deviceScaleFactor,
       sourceCapture: {
         imageUrl: `${publicBase}/source.png`,
         width: pixelDiff.width,
@@ -181,7 +188,7 @@ async function runScratchCompare(input) {
     await writeFile(paths.summaryFile, `${JSON.stringify(payload, null, 2)}\n`);
     return payload;
   } finally {
-    await page.close();
+    await context.close();
     await browser.close();
   }
 }

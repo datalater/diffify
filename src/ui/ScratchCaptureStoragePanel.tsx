@@ -66,7 +66,7 @@ export function ScratchCaptureStoragePanel({
   };
 
   return (
-    <details className="group mx-4 mb-6 rounded border border-slate-300 bg-white text-xs shadow-sm">
+    <details className="group mt-3 rounded border border-slate-300 bg-white text-xs shadow-sm">
       <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 font-semibold text-slate-800 marker:content-none [&::-webkit-details-marker]:hidden">
         <span
           className="inline-block w-3 shrink-0 text-center text-slate-400 transition-transform group-open:rotate-90"

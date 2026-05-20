@@ -19,6 +19,7 @@ export interface ScratchCompareResult {
   runId: string;
   outputDir: string;
   viewport: { width: number; height: number };
+  deviceScaleFactor?: number;
   sourceCapture: CaptureArtifact;
   resultCapture: CaptureArtifact;
   pixelDiff: PixelDiffResult;
@@ -43,6 +44,14 @@ export interface ScratchStorageInfo {
   runs: ScratchStorageRun[];
 }
 
-export type ScratchCompareFeatureMode = 'overlay' | 'pixel-diff';
+/** Preview 패널 1차: iframe 코드 vs Playwright PNG */
+export type ScratchPreviewSubstrate = 'code' | 'capture';
 
-export type ScratchOverlayStackMode = 'live' | 'capture';
+/** 캡처 preview 안에서만: 겹침 vs diff 리포트 */
+export type ScratchCaptureViewMode = 'overlay' | 'pixel-diff';
+
+export type ScratchCompareHealth = {
+  ok: boolean;
+  message: string;
+  captureDeviceScaleFactor: number;
+};

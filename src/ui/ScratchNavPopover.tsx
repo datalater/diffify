@@ -2,17 +2,23 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
 
-import { NAV_PANEL_CLASS } from './scratch-github-ui';
+import { NAV_PANEL_BASE_CLASS } from './scratch-github-ui';
+import {
+  settlePopoverInViewport,
+  type PopoverAlign,
+} from './popover-viewport';
 
 export function ScratchNavPopover({
   trigger,
   children,
   panelClassName,
+  align = 'start',
 }: {
   trigger: (state: {
     open: boolean;
@@ -22,14 +28,32 @@ export function ScratchNavPopover({
   }) => ReactNode;
   children: ReactNode;
   panelClassName?: string;
+  /** start = 왼쪽 정렬, end = 오른쪽 정렬 (공유 메뉴 등) */
+  align?: PopoverAlign;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const triggerId = useId();
   const panelId = useId();
 
+  const panelBaseClass = `${NAV_PANEL_BASE_CLASS} ${panelClassName ?? ''}`.trim();
+
   const close = useCallback(() => setOpen(false), []);
   const toggle = useCallback(() => setOpen((prev) => !prev), []);
+
+  useLayoutEffect(() => {
+    if (!open || !panelRef.current) return;
+
+    const panel = panelRef.current;
+    settlePopoverInViewport(panel, align, panelBaseClass);
+
+    const onResize = () => {
+      settlePopoverInViewport(panel, align, panelBaseClass);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [open, align, panelBaseClass, children]);
 
   useEffect(() => {
     if (!open) return;
@@ -62,10 +86,11 @@ export function ScratchNavPopover({
       {trigger({ open, toggle, triggerId, panelId })}
       {open ? (
         <div
+          ref={panelRef}
           id={panelId}
           role="dialog"
           aria-labelledby={triggerId}
-          className={`${NAV_PANEL_CLASS} ${panelClassName ?? ''}`}
+          className={`${panelBaseClass} left-0 top-full mt-1`}
         >
           {children}
         </div>

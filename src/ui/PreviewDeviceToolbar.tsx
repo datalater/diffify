@@ -1,26 +1,32 @@
 import type { ChangeEvent } from 'react';
+import type { PreviewLiveMeasured } from '../lib/measure-iframe-content';
 import { LAYOUT_BREAKPOINT_WIDTH_CHIPS } from '../lib/layout-breakpoints';
+import type {
+  PreviewHeightMode,
+  PreviewWidthMode,
+} from '../lib/preview-size-mode';
+import { isBreakpointWidth } from '../lib/preview-size-mode';
 
 const PREVIEW_MAX_W = 4096;
 const PREVIEW_MAX_H = 12000;
 
 const TOOLBAR_CLASS =
-  'flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#454545] bg-[#323232] px-3 py-1.5 font-sans text-[11px] leading-none text-[#ccc]';
+  'flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-slate-300 bg-slate-50 px-3 py-1.5 font-sans text-[11px] leading-none text-slate-700';
 
 const INPUT_CLASS =
-  'w-[4.25rem] rounded-sm border border-[#5a5a5a] bg-[#1e1e1e] px-1.5 py-0.5 font-mono text-[11px] text-[#e8e8e8] tabular-nums focus:border-[#6eb3f7] focus:outline-none';
+  'w-[4.25rem] rounded-sm border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[11px] text-slate-800 tabular-nums focus:border-sky-500 focus:outline-none';
 
-const SEPARATOR_CLASS = 'text-[#666]';
+const SEPARATOR_CLASS = 'text-slate-400';
 
 const TEXT_BTN_CLASS =
-  'cursor-pointer text-[#999] transition hover:text-[#e8e8e8] disabled:cursor-not-allowed disabled:opacity-40';
+  'cursor-pointer text-slate-500 transition hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40';
 
 const CHIP_CLASS = (active: boolean) =>
   [
     'cursor-pointer rounded-sm px-1 py-0.5 font-mono tabular-nums transition disabled:cursor-not-allowed disabled:opacity-40',
     active
-      ? 'bg-[#454545] text-[#e8e8e8]'
-      : 'text-[#999] hover:bg-[#3a3a3a] hover:text-[#ccc]',
+      ? 'bg-slate-200 text-slate-900'
+      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800',
   ].join(' ');
 
 function clampPreviewWidth(n: number): number {
@@ -38,32 +44,49 @@ function clampPreviewHeight(n: number): number {
 export type PreviewDeviceToolbarProps = {
   previewWidth: number;
   previewHeight: number;
-  onPreviewWidthChange: (width: number) => void;
-  onPreviewHeightChange: (height: number) => void;
+  widthMode: PreviewWidthMode;
+  heightMode: PreviewHeightMode;
+  onSelectBreakpointWidth: (width: number) => void;
+  onSelectWidthFit: () => void;
+  onSelectHeightFit: () => void;
+  onPreviewWidthCustom: (width: number) => void;
+  onPreviewHeightCap: (height: number) => void;
   isPreviewSizeAtBaseline: boolean;
   onResetPreviewSize: () => void;
-  previewMeasured: { width: number; height: number } | null;
+  previewMeasured: PreviewLiveMeasured | null;
   className?: string;
 };
 
-/** Chrome DevTools device toolbar — Preview 스테이지 상단 iframe 뷰포트 크기 */
+/** Preview 스테이지 상단 — breakpoint·w-fit/h-fit 은 라디오 그룹 */
 export function PreviewDeviceToolbar({
   previewWidth,
   previewHeight,
-  onPreviewWidthChange,
-  onPreviewHeightChange,
+  widthMode,
+  heightMode,
+  onSelectBreakpointWidth,
+  onSelectWidthFit,
+  onSelectHeightFit,
+  onPreviewWidthCustom,
+  onPreviewHeightCap,
   isPreviewSizeAtBaseline,
   onResetPreviewSize,
   previewMeasured,
   className,
 }: PreviewDeviceToolbarProps) {
+  const displayWidth = previewMeasured?.iframeWidth ?? previewWidth;
+  const displayHeight = previewMeasured?.iframeHeight ?? previewHeight;
+  const canWidthFit =
+    previewMeasured !== null && previewMeasured.contentWidth > 1;
+  const canHeightFit =
+    previewMeasured !== null && previewMeasured.contentHeight > 0;
+
   return (
     <div
       className={`${TOOLBAR_CLASS} ${className ?? ''}`}
       role="toolbar"
       aria-label="iframe 뷰포트 크기"
     >
-      <span className="text-[#999]">Dimensions</span>
+      <span className="text-slate-500">Dimensions</span>
       <label className="inline-flex items-center gap-1">
         <span className="sr-only">너비</span>
         <input
@@ -71,11 +94,17 @@ export function PreviewDeviceToolbar({
           min={1}
           max={PREVIEW_MAX_W}
           step={1}
-          value={previewWidth}
+          value={displayWidth}
           onChange={(event: ChangeEvent<HTMLInputElement>) => {
-            onPreviewWidthChange(clampPreviewWidth(event.target.valueAsNumber));
+            const width = clampPreviewWidth(event.target.valueAsNumber);
+            if (isBreakpointWidth(width)) {
+              onSelectBreakpointWidth(width);
+            } else {
+              onPreviewWidthCustom(width);
+            }
           }}
           className={INPUT_CLASS}
+          title="iframe 뷰포트 너비"
         />
       </label>
       <span className={SEPARATOR_CLASS} aria-hidden>
@@ -88,13 +117,18 @@ export function PreviewDeviceToolbar({
           min={1}
           max={PREVIEW_MAX_H}
           step={1}
-          value={previewHeight}
+          value={displayHeight}
           onChange={(event: ChangeEvent<HTMLInputElement>) => {
-            onPreviewHeightChange(
-              clampPreviewHeight(event.target.valueAsNumber),
-            );
+            onPreviewHeightCap(clampPreviewHeight(event.target.valueAsNumber));
           }}
           className={INPUT_CLASS}
+          title={
+            heightMode.kind === 'fit'
+              ? '콘텐츠에 맞춘 높이 (수동 입력 시 cap 모드)'
+              : previewMeasured && displayHeight < previewHeight
+                ? `iframe 높이 (최대 ${previewHeight})`
+                : 'iframe 뷰포트 높이'
+          }
         />
       </label>
       <button
@@ -107,49 +141,41 @@ export function PreviewDeviceToolbar({
         Reset
       </button>
       <span
-        className="mx-0.5 hidden h-3 w-px bg-[#555] sm:inline-block"
+        className="mx-0.5 hidden h-3 w-px bg-slate-300 sm:inline-block"
         aria-hidden
       />
       {LAYOUT_BREAKPOINT_WIDTH_CHIPS.map((chip) => (
         <button
           key={chip.label}
           type="button"
-          onClick={() => onPreviewWidthChange(clampPreviewWidth(chip.width))}
+          onClick={() => onSelectBreakpointWidth(chip.width)}
           title={chip.title}
-          className={CHIP_CLASS(previewWidth === chip.width)}
+          className={CHIP_CLASS(
+            widthMode.kind === 'breakpoint' && widthMode.width === chip.width,
+          )}
         >
           {chip.label}
         </button>
       ))}
       <span
-        className="mx-0.5 hidden h-3 w-px bg-[#555] sm:inline-block"
+        className="mx-0.5 hidden h-3 w-px bg-slate-300 sm:inline-block"
         aria-hidden
       />
       <button
         type="button"
-        disabled={previewMeasured === null}
-        onClick={() => {
-          if (!previewMeasured) return;
-          onPreviewWidthChange(clampPreviewWidth(previewMeasured.width));
-        }}
-        title="iframe에서 실측한 콘텐츠 너비에 맞춘다. 높이는 유지한다."
-        className={CHIP_CLASS(
-          previewMeasured !== null && previewWidth === previewMeasured.width,
-        )}
+        disabled={!canWidthFit}
+        onClick={onSelectWidthFit}
+        title="보이는 레이어 콘텐츠 실측 너비에 맞춘다 (breakpoint 칩과 배타)."
+        className={CHIP_CLASS(widthMode.kind === 'fit')}
       >
         w-fit
       </button>
       <button
         type="button"
-        disabled={previewMeasured === null}
-        onClick={() => {
-          if (!previewMeasured) return;
-          onPreviewHeightChange(clampPreviewHeight(previewMeasured.height));
-        }}
-        title="iframe에서 실측한 콘텐츠 높이에 맞춘다. 너비는 유지한다."
-        className={CHIP_CLASS(
-          previewMeasured !== null && previewHeight === previewMeasured.height,
-        )}
+        disabled={!canHeightFit}
+        onClick={onSelectHeightFit}
+        title="보이는 레이어 콘텐츠 실측 높이에 맞춘다 (cap 모드와 배타)."
+        className={CHIP_CLASS(heightMode.kind === 'fit')}
       >
         h-fit
       </button>

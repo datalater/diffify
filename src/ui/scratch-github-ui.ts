@@ -6,25 +6,6 @@ export const GITHUB_CANVAS = '#161b22';
 export const GITHUB_TOOLBAR_GROUP_CLASS =
   'inline-flex h-8 items-stretch overflow-hidden rounded-md border border-[#30363d] bg-[#21262d] font-sans text-xs shadow-sm';
 
-/** 로컬 캡처 바 — 버튼·셀렉트가 bar 높이를 꽉 채움 */
-export const GITHUB_COMPARE_BAR_CLASS =
-  'inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-md border border-[#30363d] bg-[#21262d] font-sans text-xs shadow-sm';
-
-export const GITHUB_COMPARE_SEGMENT_CLASS =
-  'inline-flex shrink-0 items-center border-r border-[#30363d] px-2.5';
-
-export const GITHUB_COMPARE_SELECT_WRAP_CLASS =
-  'relative flex h-full min-w-[6.5rem] shrink-0 items-center border-r border-[#30363d]';
-
-export const GITHUB_COMPARE_SELECT_CLASS =
-  'h-full w-full min-w-0 cursor-pointer appearance-none bg-transparent py-0 pl-2.5 pr-7 text-xs font-medium text-[#e6edf3] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#388bfd]';
-
-export const GITHUB_COMPARE_CAPTURE_BTN_CLASS =
-  'inline-flex h-full shrink-0 items-center border-r border-[#30363d] bg-[#238636] px-3 font-medium text-white transition-colors hover:bg-[#2ea043] focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#388bfd] disabled:cursor-not-allowed disabled:bg-[#21262d] disabled:text-[#484f58] disabled:hover:bg-[#21262d]';
-
-export const GITHUB_COMPARE_METRICS_CLASS =
-  'inline-flex shrink-0 items-center px-2.5 font-mono text-[11px] font-semibold text-[#d29922] bg-[#bb800926]';
-
 export const GITHUB_BTN_CLASS =
   'inline-flex items-center px-3 font-medium text-[#e6edf3] transition-colors hover:bg-[#30363d] focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#388bfd] disabled:cursor-not-allowed disabled:text-[#484f58] disabled:hover:bg-transparent';
 
@@ -40,8 +21,12 @@ export const GITHUB_SELECT_CLASS =
 export const NAV_MENU_TRIGGER_CLASS =
   'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-[#30363d] bg-[#21262d] px-3 text-xs font-medium text-[#e6edf3] shadow-sm transition-colors hover:bg-[#30363d] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#388bfd]';
 
-export const NAV_PANEL_CLASS =
-  'absolute left-0 top-full z-50 mt-1 min-w-[12rem] rounded-md border border-[#30363d] bg-[#161b22] py-1 shadow-lg';
+/** 위치(align/side)는 ScratchNavPopover가 붙임 */
+export const NAV_PANEL_BASE_CLASS =
+  'absolute z-50 min-w-[12rem] rounded-md border border-[#30363d] bg-[#161b22] py-1 shadow-lg';
+
+/** @deprecated use NAV_PANEL_BASE_CLASS + popoverPanelPlacementClass */
+export const NAV_PANEL_CLASS = `${NAV_PANEL_BASE_CLASS} left-0 top-full mt-1`;
 
 export const NAV_MENU_ITEM_CLASS =
   'w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-xs font-medium text-[#e6edf3] transition-colors hover:bg-[#30363d] disabled:cursor-not-allowed disabled:text-[#484f58]';
@@ -49,5 +34,8 @@ export const NAV_MENU_ITEM_CLASS =
 export const NAV_SUBMENU_ITEM_CLASS =
   'w-full cursor-pointer whitespace-nowrap rounded-sm px-3 py-1.5 text-left text-xs text-[#e6edf3] transition-colors hover:bg-[#30363d]';
 
-export const NAV_SUBMENU_PANEL_CLASS =
-  'absolute top-0 left-full z-[60] ml-0.5 min-w-[7rem] rounded-md border border-[#30363d] bg-[#161b22] py-1 pl-0.5 shadow-lg';
+export const NAV_SUBMENU_PANEL_BASE_CLASS =
+  'absolute z-[60] min-w-[7rem] rounded-md border border-[#30363d] bg-[#161b22] py-1 pl-0.5 shadow-lg';
+
+/** @deprecated use NAV_SUBMENU_PANEL_BASE_CLASS + submenuPanelPlacementClass */
+export const NAV_SUBMENU_PANEL_CLASS = `${NAV_SUBMENU_PANEL_BASE_CLASS} top-0 left-full ml-0.5`;

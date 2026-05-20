@@ -1,9 +1,36 @@
-import { useCallback, useEffect, useState, type SyntheticEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from 'react';
 import {
   measureIframeContentSize,
   type IframeContentSize,
+  type PreviewLiveMeasured,
 } from '../lib/measure-iframe-content';
 import { ArtboardMatEmpty, ArtboardMatFrame } from './ArtboardMatFrame';
+
+const MEASURE_RETRY_MS = [150, 500] as const;
+
+function measureWithRetries(
+  frame: HTMLIFrameElement,
+  setSize: (size: IframeContentSize) => void,
+): () => void {
+  const run = async () => {
+    setSize(await measureIframeContentSize(frame));
+  };
+  void run();
+  const timeoutIds = MEASURE_RETRY_MS.map((ms) =>
+    window.setTimeout(() => void run(), ms),
+  );
+  return () => {
+    for (const id of timeoutIds) {
+      window.clearTimeout(id);
+    }
+  };
+}
 
 export function DiffifyLiveOverlay({
   sourceDoc,
@@ -18,39 +45,58 @@ export function DiffifyLiveOverlay({
   width: number;
   fallbackHeight: number;
   showingSource: boolean;
-  onLiveBoxMeasured?: (size: { width: number; height: number }) => void;
+  onLiveBoxMeasured?: (size: PreviewLiveMeasured) => void;
 }) {
   const [sizeSource, setSizeSource] = useState<IframeContentSize | null>(null);
   const [sizeResult, setSizeResult] = useState<IframeContentSize | null>(null);
+  const sourceFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const resultFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     setSizeSource(null);
     setSizeResult(null);
-  }, [sourceDoc, resultDoc, width, fallbackHeight]);
+    sourceFrameRef.current = null;
+    resultFrameRef.current = null;
+  }, [sourceDoc, resultDoc]);
 
   const scheduleMeasure = useCallback(
-    (which: 'source' | 'result') => (frame: HTMLIFrameElement) => {
+    (which: 'source' | 'result', frame: HTMLIFrameElement) => {
+      if (which === 'source') {
+        sourceFrameRef.current = frame;
+      } else {
+        resultFrameRef.current = frame;
+      }
       const setSize = which === 'source' ? setSizeSource : setSizeResult;
-      const run = async () => {
-        setSize(await measureIframeContentSize(frame));
-      };
-      void run();
-      window.setTimeout(() => void run(), 150);
-      window.setTimeout(() => void run(), 500);
+      return measureWithRetries(frame, setSize);
     },
     [],
   );
 
+  useEffect(() => {
+    const cleanups: (() => void)[] = [];
+    if (sourceFrameRef.current) {
+      cleanups.push(scheduleMeasure('source', sourceFrameRef.current));
+    }
+    if (resultFrameRef.current) {
+      cleanups.push(scheduleMeasure('result', resultFrameRef.current));
+    }
+    return () => {
+      for (const cleanup of cleanups) {
+        cleanup();
+      }
+    };
+  }, [width, fallbackHeight, scheduleMeasure]);
+
   const onSourceLoad = useCallback(
     (event: SyntheticEvent<HTMLIFrameElement>) => {
-      scheduleMeasure('source')(event.currentTarget);
+      scheduleMeasure('source', event.currentTarget);
     },
     [scheduleMeasure],
   );
 
   const onResultLoad = useCallback(
     (event: SyntheticEvent<HTMLIFrameElement>) => {
-      scheduleMeasure('result')(event.currentTarget);
+      scheduleMeasure('result', event.currentTarget);
     },
     [scheduleMeasure],
   );
@@ -60,13 +106,7 @@ export function DiffifyLiveOverlay({
   const showSourceLayer = canShowSource && (showingSource || !canShowResult);
   const showResultLayer = canShowResult && (!showingSource || !canShowSource);
 
-  const hSource = sizeSource?.height ?? null;
-  const hResult = sizeResult?.height ?? null;
-  const hasMeasure = hSource !== null || hResult !== null;
-  const rawMax = Math.max(hSource ?? 0, hResult ?? 0, 80);
-  const viewportCap = Math.max(fallbackHeight, 80);
-  const boxHeight = hasMeasure ? Math.min(rawMax, viewportCap) : fallbackHeight;
-
+  /** 보이는 레이어만 box·w-fit/h-fit에 반영 (숨긴 쪽 높이가 섞이지 않음) */
   const visibleLayerSize =
     showSourceLayer && sizeSource
       ? sizeSource
@@ -74,12 +114,22 @@ export function DiffifyLiveOverlay({
         ? sizeResult
         : null;
 
+  const viewportCap = Math.max(fallbackHeight, 80);
+  const boxHeight = visibleLayerSize
+    ? Math.min(Math.max(visibleLayerSize.height, 80), viewportCap)
+    : fallbackHeight;
+
+  const contentWidth = visibleLayerSize?.width ?? width;
+  const contentHeight = visibleLayerSize?.height ?? boxHeight;
+
   useEffect(() => {
     onLiveBoxMeasured?.({
-      width: visibleLayerSize?.width ?? width,
-      height: boxHeight,
+      iframeWidth: width,
+      iframeHeight: boxHeight,
+      contentWidth,
+      contentHeight,
     });
-  }, [visibleLayerSize, width, boxHeight, onLiveBoxMeasured]);
+  }, [width, boxHeight, contentWidth, contentHeight, onLiveBoxMeasured]);
 
   if (!canShowSource && !canShowResult) {
     return (
@@ -92,46 +142,46 @@ export function DiffifyLiveOverlay({
   return (
     <ArtboardMatFrame width={width} height={boxHeight}>
       <div className="relative size-full">
-      {canShowResult ? (
-        <iframe
-          title="diffify-result"
-          srcDoc={resultDoc}
-          onLoad={onResultLoad}
-          sandbox="allow-scripts allow-same-origin allow-forms"
-          style={{
-            width: `${width}px`,
-            height: `${boxHeight}px`,
-            border: 0,
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            zIndex: 0,
-            visibility: showResultLayer ? 'visible' : 'hidden',
-            pointerEvents: showResultLayer ? 'auto' : 'none',
-          }}
-          className="block"
-        />
-      ) : null}
-      {canShowSource ? (
-        <iframe
-          title="diffify-source"
-          srcDoc={sourceDoc}
-          onLoad={onSourceLoad}
-          sandbox="allow-scripts allow-same-origin allow-forms"
-          style={{
-            width: `${width}px`,
-            height: `${boxHeight}px`,
-            border: 0,
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            zIndex: 1,
-            visibility: showSourceLayer ? 'visible' : 'hidden',
-            pointerEvents: showSourceLayer ? 'auto' : 'none',
-          }}
-          className="block"
-        />
-      ) : null}
+        {canShowResult ? (
+          <iframe
+            title="diffify-result"
+            srcDoc={resultDoc}
+            onLoad={onResultLoad}
+            sandbox="allow-scripts allow-same-origin allow-forms"
+            style={{
+              width: `${width}px`,
+              height: `${boxHeight}px`,
+              border: 0,
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              zIndex: 0,
+              visibility: showResultLayer ? 'visible' : 'hidden',
+              pointerEvents: showResultLayer ? 'auto' : 'none',
+            }}
+            className="block"
+          />
+        ) : null}
+        {canShowSource ? (
+          <iframe
+            title="diffify-source"
+            srcDoc={sourceDoc}
+            onLoad={onSourceLoad}
+            sandbox="allow-scripts allow-same-origin allow-forms"
+            style={{
+              width: `${width}px`,
+              height: `${boxHeight}px`,
+              border: 0,
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              zIndex: 1,
+              visibility: showSourceLayer ? 'visible' : 'hidden',
+              pointerEvents: showSourceLayer ? 'auto' : 'none',
+            }}
+            className="block"
+          />
+        ) : null}
       </div>
     </ArtboardMatFrame>
   );

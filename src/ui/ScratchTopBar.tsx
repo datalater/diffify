@@ -50,37 +50,43 @@ export function ScratchTopBar({
 }: ScratchTopBarProps) {
   return (
     <nav className="border-b border-[#30363d] bg-[#161b22] font-sans text-[13px] text-[#e6edf3]">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2 min-h-[2.75rem]">
-        <span className="mr-1 text-sm font-semibold tracking-tight text-[#e6edf3]">
+      <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2 min-h-[2.75rem]">
+        <span className="mr-1 shrink-0 text-sm font-semibold tracking-tight text-[#e6edf3]">
           diffify scratch
         </span>
 
         {projectRegistry ? (
-          <ScratchProjectControls
-            registry={projectRegistry}
-            disabled={versionControlsDisabled}
-            onSelectProject={onSelectProject}
-            onCreateProject={onCreateProject}
-          />
+          <div
+            className="flex shrink-0 items-center gap-1"
+            role="group"
+            aria-label="워크스페이스"
+          >
+            <ScratchProjectControls
+              registry={projectRegistry}
+              disabled={versionControlsDisabled}
+              onSelectProject={onSelectProject}
+              onCreateProject={onCreateProject}
+            />
+            <ScratchVersionControls
+              meta={versionMeta}
+              dirty={versionDirty}
+              disabled={versionControlsDisabled}
+              onCreateVersion={onCreateVersion}
+              onSelectValue={onSelectVersionValue}
+            />
+          </div>
         ) : null}
 
-        <ScratchShareMenu
-          persistContent={persistContent}
-          editors={editors}
-          onCopyShareUrl={onCopyShareUrl}
-          onImportLayer={onImportLayer}
-          onNotify={onNotify}
-        />
-
-        <ScratchVersionControls
-          meta={versionMeta}
-          dirty={versionDirty}
-          disabled={versionControlsDisabled}
-          onCreateVersion={onCreateVersion}
-          onSelectValue={onSelectVersionValue}
-        />
-
-        {trailing}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <ScratchShareMenu
+            persistContent={persistContent}
+            editors={editors}
+            onCopyShareUrl={onCopyShareUrl}
+            onImportLayer={onImportLayer}
+            onNotify={onNotify}
+          />
+          {trailing}
+        </div>
       </div>
       <p className="flex items-start gap-2 border-t border-[#30363d] bg-[#0d1117] px-4 py-2 text-xs leading-snug text-[#8b949e]">
         <span className="shrink-0" aria-hidden>

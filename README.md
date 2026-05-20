@@ -51,6 +51,14 @@ npm run setup:playwright
 - **로컬 캡처 저장소**: 페이지 하단에서 run 목록·용량·비우기
 
 GitHub Pages 빌드에는 compare UI/API가 포함되지 않는다.
+
+캡처 화질(선택):
+
+```bash
+DIFFIFY_CAPTURE_SCALE=2 npm run dev
+```
+
+`1`–`4` (기본 `1`). Playwright `deviceScaleFactor`와 `.diffify` 경로(`768x900@2x` 등)에 반영된다.
 ## GitHub Pages 배포
 
 1. GitHub에서 repo `datalater/diffify` 생성

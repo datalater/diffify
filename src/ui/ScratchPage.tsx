@@ -32,20 +32,38 @@ import {
 } from "../lib/scratch-version-storage";
 import { writeScratchShowingSource } from "../lib/scratch-ui-state";
 import {
+  fetchScratchCompareHealth,
   installScratchCompareBrowsers,
   postScratchCompare,
   fetchLatestScratchCompare,
   scratchViewportKey,
 } from "../lib/scratch-compare-api";
 import type {
-  ScratchCompareFeatureMode,
+  ScratchCaptureViewMode,
   ScratchCompareResult,
-  ScratchOverlayStackMode,
+  ScratchPreviewSubstrate,
 } from "../lib/scratch-compare-types";
 import type { ScratchHtmlLayer } from "../lib/scratch-html-io";
+import type { PreviewLiveMeasured } from "../lib/measure-iframe-content";
+import {
+  DEFAULT_PREVIEW_HEIGHT_MODE,
+  DEFAULT_PREVIEW_WIDTH_MODE,
+  isBreakpointWidth,
+  isPreviewSizeModeAtBaseline,
+  previewWidthModeFromWidth,
+  type PreviewHeightMode,
+  type PreviewWidthMode,
+} from "../lib/preview-size-mode";
 import { ScratchCaptureStoragePanel } from "./ScratchCaptureStoragePanel";
 import { ScratchComparePreview } from "./ScratchCapturePreview";
 import { ScratchDevCompareBar } from "./ScratchDevCompareBar";
+import { PreviewLayerChips } from "./PreviewLayerChips";
+import { ScratchPreviewSubstrateSwitch } from "./ScratchPreviewSubstrateSwitch";
+import {
+  SCRATCH_PREVIEW_HINT_CLASS,
+  SCRATCH_PREVIEW_PANEL_CLASS,
+  SCRATCH_PREVIEW_TOOLBAR_DIVIDER_CLASS,
+} from "./scratch-preview-ui";
 import { ScratchFullDocumentDialog } from "./ScratchFullDocumentDialog";
 import { PreviewDeviceToolbar } from "./PreviewDeviceToolbar";
 import {
@@ -95,62 +113,6 @@ function applyEditorsToEditorState(
   setters.setPreviewDocs(buildPreviewDocs(document));
 }
 
-const NAV_BADGE = {
-  fgOnFill: "#ffffff",
-  source: "#d97706",
-  result: "#059669",
-} as const;
-
-const LAYER_CHIP_BTN_CLASS =
-  "inline-flex cursor-pointer items-center rounded-full border-0 px-2.5 py-0.5 text-[11px] font-semibold shadow-sm transition-opacity hover:opacity-100 focus:outline-2 focus:outline-sky-500 focus:outline-offset-1";
-
-function PreviewLayerChips({
-  showingSource,
-  onSelectLayer,
-}: {
-  showingSource: boolean;
-  onSelectLayer: (layer: "source" | "result") => void;
-}) {
-  return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1.5"
-      role="group"
-      aria-label="미리보기 레이어"
-    >
-      <button
-        type="button"
-        className={LAYER_CHIP_BTN_CLASS}
-        style={{
-          backgroundColor: NAV_BADGE.source,
-          color: NAV_BADGE.fgOnFill,
-          opacity: showingSource ? 1 : 0.35,
-        }}
-        aria-pressed={showingSource}
-        onClick={() => {
-          if (!showingSource) onSelectLayer("source");
-        }}
-      >
-        Source
-      </button>
-      <button
-        type="button"
-        className={LAYER_CHIP_BTN_CLASS}
-        style={{
-          backgroundColor: NAV_BADGE.result,
-          color: NAV_BADGE.fgOnFill,
-          opacity: showingSource ? 0.35 : 1,
-        }}
-        aria-pressed={!showingSource}
-        onClick={() => {
-          if (showingSource) onSelectLayer("result");
-        }}
-      >
-        Result
-      </button>
-    </span>
-  );
-}
-
 const PREVIEW_MAX_W = 4096;
 const PREVIEW_MAX_H = 12000;
 
@@ -192,32 +154,40 @@ export function ScratchPage() {
   const [showingSource, setShowingSource] = useState(defaults.showingSource);
   const [previewWidth, setPreviewWidth] = useState(defaults.previewWidth);
   const [previewHeight, setPreviewHeight] = useState(defaults.previewHeight);
+  const [previewWidthMode, setPreviewWidthMode] =
+    useState<PreviewWidthMode>(DEFAULT_PREVIEW_WIDTH_MODE);
+  const [previewHeightMode, setPreviewHeightMode] =
+    useState<PreviewHeightMode>(DEFAULT_PREVIEW_HEIGHT_MODE);
   const [status, setStatus] = useState(
     "저장된 내용을 불러오는 중… (draft·버전·URL `?state=`)",
   );
-  const [previewMeasured, setPreviewMeasured] = useState<{
-    width: number;
-    height: number;
-  } | null>(null);
+  const [previewMeasured, setPreviewMeasured] =
+    useState<PreviewLiveMeasured | null>(null);
   const [paneVisibility, setPaneVisibility] = useState<ScratchPaneVisibility>(
     () => ({ ...DEFAULT_SCRATCH_PANE_VISIBILITY }),
   );
   const [headExamplesOpen, setHeadExamplesOpen] = useState(false);
 
   const isDevCompare = import.meta.env.DEV;
+  const [captureDeviceScaleFactor, setCaptureDeviceScaleFactor] = useState(1);
+  const [previewSubstrate, setPreviewSubstrate] =
+    useState<ScratchPreviewSubstrate>("code");
   const viewportKey = useMemo(
-    () => scratchViewportKey(previewWidth, previewHeight),
-    [previewWidth, previewHeight],
+    () =>
+      scratchViewportKey(
+        previewWidth,
+        previewHeight,
+        captureDeviceScaleFactor,
+      ),
+    [previewWidth, previewHeight, captureDeviceScaleFactor],
   );
   const [compareResult, setCompareResult] = useState<ScratchCompareResult | null>(
     null,
   );
   const [isComparing, setIsComparing] = useState(false);
   const [isLoadingLatestCompare, setIsLoadingLatestCompare] = useState(false);
-  const [featureMode, setFeatureMode] =
-    useState<ScratchCompareFeatureMode>("overlay");
-  const [overlayStackMode, setOverlayStackMode] =
-    useState<ScratchOverlayStackMode>("live");
+  const [captureViewMode, setCaptureViewMode] =
+    useState<ScratchCaptureViewMode>("overlay");
   const [storageRefreshToken, setStorageRefreshToken] = useState(0);
   const [showInstallBrowsers, setShowInstallBrowsers] = useState(false);
   const [isInstallingBrowsers, setIsInstallingBrowsers] = useState(false);
@@ -314,12 +284,21 @@ export function ScratchPage() {
         defaultScratchPreviewDimensions();
       setPreviewWidth(clampWidth(w));
       setPreviewHeight(clampHeight(h));
+      setPreviewWidthMode(DEFAULT_PREVIEW_WIDTH_MODE);
+      setPreviewHeightMode(DEFAULT_PREVIEW_HEIGHT_MODE);
       setHydrated(true);
     })();
     return () => {
       cancelled = true;
     };
   }, [loadProjectWorkspace]);
+
+  useEffect(() => {
+    if (!isDevCompare) return;
+    void fetchScratchCompareHealth().then((health) => {
+      setCaptureDeviceScaleFactor(health.captureDeviceScaleFactor);
+    });
+  }, [isDevCompare]);
 
   useEffect(() => {
     if (!isDevCompare || !hydrated || !activeProjectId) return;
@@ -339,9 +318,6 @@ export function ScratchPage() {
           return;
         }
         setCompareResult(payload);
-        setStatus(
-          `저장된 캡처를 불러왔다 (run ${payload.runId}). 새로 만들려면 「새로 캡처」.`,
-        );
       } catch {
         if (!cancelled) {
           setCompareResult(null);
@@ -371,13 +347,15 @@ export function ScratchPage() {
         resultDocument: previewDocs.result,
       });
       setCompareResult(payload);
-      setFeatureMode("overlay");
-      setOverlayStackMode("capture");
       setStorageRefreshToken((t) => t + 1);
+      const scaleNote =
+        payload.deviceScaleFactor && payload.deviceScaleFactor > 1
+          ? ` · DPR ${payload.deviceScaleFactor}`
+          : "";
       setStatus(
         payload.pixelDiff.diffPixels === 0
-          ? `캡처 완료 (run ${payload.runId}). pixel-perfect.`
-          : `캡처 완료 (run ${payload.runId}). ${payload.pixelDiff.diffPercent}% 차이.`,
+          ? `캡처 완료 (run ${payload.runId}). pixel-perfect.${scaleNote}`
+          : `캡처 완료 (run ${payload.runId}). ${payload.pixelDiff.diffPercent}% 차이.${scaleNote}`,
       );
     } catch (error) {
       const message =
@@ -552,14 +530,23 @@ export function ScratchPage() {
         return;
       }
       if (event.code === "Space" || event.code === "KeyD") {
-        if (isDevCompare && featureMode !== "overlay") return;
+        const layerToggleEnabled =
+          !isDevCompare ||
+          previewSubstrate === "code" ||
+          (previewSubstrate === "capture" && captureViewMode === "overlay");
+        if (!layerToggleEnabled) return;
         event.preventDefault();
         setShowingSource((prev) => !prev);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [paneVisibility.preview, isDevCompare, featureMode]);
+  }, [
+    paneVisibility.preview,
+    isDevCompare,
+    previewSubstrate,
+    captureViewMode,
+  ]);
 
   const diffMetricsText =
     compareResult?.pixelDiff == null
@@ -567,16 +554,6 @@ export function ScratchPage() {
       : compareResult.pixelDiff.diffPixels === 0
         ? "pixel-perfect"
         : `${compareResult.pixelDiff.diffPercent}% · ${compareResult.pixelDiff.diffPixels.toLocaleString()} px`;
-
-  const comparePreviewHint =
-    isDevCompare && featureMode === "pixel-diff"
-      ? "픽셀 diff — 빨간 영역이 차이."
-      : isDevCompare &&
-          compareResult &&
-          featureMode === "overlay" &&
-          overlayStackMode === "capture"
-        ? "캡처 오버레이 — Space/D로 Source·Result 전환.「라이브」로 iframe."
-        : "Space/D 또는 칩 클릭으로 Source·Result 전환 (iframe 유지).";
 
   const formatSourceHead = useCallback(() => {
     setEditors((prev) => ({
@@ -610,15 +587,66 @@ export function ScratchPage() {
     setStatus("Result HTML을 포맷했다.");
   }, []);
 
-  const isPreviewSizeAtBaseline =
-    previewWidth === BASELINE_PREVIEW.previewWidth &&
-    previewHeight === BASELINE_PREVIEW.previewHeight;
+  useEffect(() => {
+    if (previewWidthMode.kind !== "fit" || previewMeasured === null) return;
+    const next = clampWidth(previewMeasured.contentWidth);
+    if (next !== previewWidth) setPreviewWidth(next);
+  }, [previewWidthMode, previewMeasured, previewWidth]);
+
+  useEffect(() => {
+    if (previewHeightMode.kind !== "fit" || previewMeasured === null) return;
+    const next = clampHeight(previewMeasured.contentHeight);
+    if (next !== previewHeight) setPreviewHeight(next);
+  }, [previewHeightMode, previewMeasured, previewHeight]);
+
+  const handleSelectBreakpointWidth = useCallback((width: number) => {
+    const w = clampWidth(width);
+    setPreviewWidthMode(
+      isBreakpointWidth(w)
+        ? { kind: "breakpoint", width: w }
+        : { kind: "custom" },
+    );
+    setPreviewWidth(w);
+  }, []);
+
+  const handleSelectWidthFit = useCallback(() => {
+    if (!previewMeasured || previewMeasured.contentWidth <= 1) return;
+    setPreviewWidthMode({ kind: "fit" });
+    setPreviewWidth(clampWidth(previewMeasured.contentWidth));
+  }, [previewMeasured]);
+
+  const handleSelectHeightFit = useCallback(() => {
+    if (!previewMeasured || previewMeasured.contentHeight <= 0) return;
+    setPreviewHeightMode({ kind: "fit" });
+    setPreviewHeight(clampHeight(previewMeasured.contentHeight));
+  }, [previewMeasured]);
+
+  const handlePreviewWidthCustom = useCallback((width: number) => {
+    const w = clampWidth(width);
+    setPreviewWidthMode(previewWidthModeFromWidth(w));
+    setPreviewWidth(w);
+  }, []);
+
+  const handlePreviewHeightCap = useCallback((height: number) => {
+    setPreviewHeightMode({ kind: "cap" });
+    setPreviewHeight(clampHeight(height));
+  }, []);
+
+  const isPreviewSizeAtBaseline = isPreviewSizeModeAtBaseline(
+    previewWidth,
+    previewHeight,
+    previewWidthMode,
+    previewHeightMode,
+    BASELINE_PREVIEW,
+  );
 
   const resetPreviewSize = useCallback(() => {
     const { previewWidth: width, previewHeight: height } = BASELINE_PREVIEW;
     setPreviewWidth(width);
     setPreviewHeight(height);
-    setStatus(`미리보기 크기를 ${width}×${height}(max)으로 되돌렸다.`);
+    setPreviewWidthMode(DEFAULT_PREVIEW_WIDTH_MODE);
+    setPreviewHeightMode(DEFAULT_PREVIEW_HEIGHT_MODE);
+    setStatus(`미리보기 크기를 ${width}×${height}으로 되돌렸다.`);
   }, []);
 
   const handleCopyShareUrl = useCallback(async () => {
@@ -685,25 +713,6 @@ export function ScratchPage() {
         projectRegistry={projectRegistry}
         onSelectProject={(id) => void handleSelectProject(id)}
         onCreateProject={() => void handleCreateProject()}
-        trailing={
-          isDevCompare ? (
-            <ScratchDevCompareBar
-              disabled={!hydrated || !activeProjectId}
-              isComparing={isComparing}
-              isLoadingLatest={isLoadingLatestCompare}
-              hasCompareResult={Boolean(compareResult)}
-              featureMode={featureMode}
-              overlayStackMode={overlayStackMode}
-              diffMetricsText={diffMetricsText}
-              onCompare={() => void handleCompareNow()}
-              onFeatureModeChange={setFeatureMode}
-              onOverlayStackModeChange={setOverlayStackMode}
-              showInstallBrowsers={showInstallBrowsers}
-              isInstallingBrowsers={isInstallingBrowsers}
-              onInstallBrowsers={() => void handleInstallBrowsers()}
-            />
-          ) : null
-        }
       />
 
       <ScratchEditorPaneBar
@@ -772,36 +781,111 @@ export function ScratchPage() {
             <div
               className={`flex min-h-0 flex-col overflow-auto border border-slate-300 bg-slate-100 p-3 shadow-sm ${previewOnly || visibleEditorPaneCount === 0 ? "min-h-0 flex-1" : ""}`}
             >
-              <p className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-sans text-xs leading-snug text-slate-800">
-                <PreviewLayerChips
-                  showingSource={showingSource}
-                  onSelectLayer={(layer) =>
-                    setShowingSource(layer === "source")
-                  }
-                />
-                <span>{comparePreviewHint}</span>
-              </p>
-              <div className="inline-flex max-w-full flex-col items-stretch overflow-hidden rounded-md shadow-sm ring-1 ring-slate-300/90">
+              <div className={`mb-2 ${SCRATCH_PREVIEW_PANEL_CLASS}`}>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                  {isDevCompare ? (
+                    <>
+                      <ScratchPreviewSubstrateSwitch
+                        value={previewSubstrate}
+                        onChange={setPreviewSubstrate}
+                      />
+                      <span
+                        className={SCRATCH_PREVIEW_TOOLBAR_DIVIDER_CLASS}
+                        aria-hidden
+                      />
+                    </>
+                  ) : null}
+                  {previewSubstrate === "code" ||
+                  !isDevCompare ||
+                  previewSubstrate === "capture" ? (
+                    <div
+                      className={
+                        isDevCompare &&
+                        previewSubstrate === "capture" &&
+                        captureViewMode !== "overlay"
+                          ? "pointer-events-none invisible"
+                          : undefined
+                      }
+                      aria-hidden={
+                        isDevCompare &&
+                        previewSubstrate === "capture" &&
+                        captureViewMode !== "overlay"
+                      }
+                    >
+                      <PreviewLayerChips
+                        showingSource={showingSource}
+                        onSelectLayer={(layer) =>
+                          setShowingSource(layer === "source")
+                        }
+                      />
+                    </div>
+                  ) : null}
+                  <span
+                    className={`${SCRATCH_PREVIEW_HINT_CLASS} ${
+                      previewSubstrate === "code" || !isDevCompare
+                        ? ""
+                        : captureViewMode === "overlay"
+                          ? ""
+                          : "pointer-events-none invisible"
+                    }`}
+                    aria-hidden={
+                      !(
+                        previewSubstrate === "code" ||
+                        !isDevCompare ||
+                        captureViewMode === "overlay"
+                      )
+                    }
+                  >
+                    {previewSubstrate === "code" || !isDevCompare
+                      ? "Space/D · Source/Result"
+                      : "Space/D · 레이어"}
+                  </span>
+                </div>
+                {isDevCompare ? (
+                  <div
+                    className={
+                      previewSubstrate === "capture"
+                        ? undefined
+                        : "pointer-events-none invisible"
+                    }
+                    aria-hidden={previewSubstrate !== "capture"}
+                  >
+                    <ScratchDevCompareBar
+                      disabled={!hydrated || !activeProjectId}
+                      isComparing={isComparing}
+                      isLoadingLatest={isLoadingLatestCompare}
+                      captureViewMode={captureViewMode}
+                      diffMetricsText={diffMetricsText}
+                      onCompare={() => void handleCompareNow()}
+                      onCaptureViewModeChange={setCaptureViewMode}
+                      showInstallBrowsers={showInstallBrowsers}
+                      isInstallingBrowsers={isInstallingBrowsers}
+                      onInstallBrowsers={() => void handleInstallBrowsers()}
+                    />
+                  </div>
+                ) : null}
+              </div>
+              <div className="inline-flex max-w-full flex-col items-stretch overflow-x-auto overflow-y-visible rounded-md shadow-sm ring-1 ring-slate-300/90">
                 <PreviewDeviceToolbar
                   previewWidth={previewWidth}
                   previewHeight={previewHeight}
-                  onPreviewWidthChange={(width) =>
-                    setPreviewWidth(clampWidth(width))
-                  }
-                  onPreviewHeightChange={(height) =>
-                    setPreviewHeight(clampHeight(height))
-                  }
+                  widthMode={previewWidthMode}
+                  heightMode={previewHeightMode}
+                  onSelectBreakpointWidth={handleSelectBreakpointWidth}
+                  onSelectWidthFit={handleSelectWidthFit}
+                  onSelectHeightFit={handleSelectHeightFit}
+                  onPreviewWidthCustom={handlePreviewWidthCustom}
+                  onPreviewHeightCap={handlePreviewHeightCap}
                   isPreviewSizeAtBaseline={isPreviewSizeAtBaseline}
                   onResetPreviewSize={resetPreviewSize}
                   previewMeasured={previewMeasured}
                 />
                 <ScratchComparePreview
-                  mode={isDevCompare ? featureMode : "overlay"}
+                  substrate={isDevCompare ? previewSubstrate : "code"}
+                  captureViewMode={captureViewMode}
                   compareResult={isDevCompare ? compareResult : null}
+                  dualSubstrate={isDevCompare}
                   showingSource={showingSource}
-                  overlayStackMode={
-                    isDevCompare ? overlayStackMode : "live"
-                  }
                   sourceDoc={previewDocs.source}
                   resultDoc={previewDocs.result}
                   width={previewWidth}
@@ -809,21 +893,20 @@ export function ScratchPage() {
                   onLiveBoxMeasured={setPreviewMeasured}
                 />
               </div>
+              {isDevCompare ? (
+                <ScratchCaptureStoragePanel
+                  refreshToken={storageRefreshToken}
+                  compareBusy={isComparing || isLoadingLatestCompare}
+                  onNotify={setStatus}
+                  onCleared={() => {
+                    setCompareResult(null);
+                  }}
+                />
+              ) : null}
             </div>
           </section>
         ) : null}
       </div>
-
-      {isDevCompare ? (
-        <ScratchCaptureStoragePanel
-          refreshToken={storageRefreshToken}
-          compareBusy={isComparing || isLoadingLatestCompare}
-          onNotify={setStatus}
-          onCleared={() => {
-            setCompareResult(null);
-          }}
-        />
-      ) : null}
 
       <ScratchFullDocumentDialog
         open={headExamplesOpen}

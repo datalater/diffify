@@ -1,41 +1,20 @@
+import type { ScratchCaptureViewMode } from '../lib/scratch-compare-types';
+import { ScratchCaptureViewModeSwitch } from './ScratchCaptureViewModeSwitch';
 import {
-  GITHUB_BTN_CLASS,
-  GITHUB_COMPARE_BAR_CLASS,
-  GITHUB_COMPARE_CAPTURE_BTN_CLASS,
-  GITHUB_COMPARE_METRICS_CLASS,
-  GITHUB_COMPARE_SEGMENT_CLASS,
-  GITHUB_COMPARE_SELECT_CLASS,
-  GITHUB_COMPARE_SELECT_WRAP_CLASS,
-} from './scratch-github-ui';
-import type {
-  ScratchCompareFeatureMode,
-  ScratchOverlayStackMode,
-} from '../lib/scratch-compare-types';
+  SCRATCH_DIFF_METRICS_BADGE_CLASS,
+  SCRATCH_TOOLBAR_BTN_GHOST_CLASS,
+  SCRATCH_TOOLBAR_BTN_PRIMARY_CLASS,
+} from './scratch-preview-ui';
 
-function SelectChevron() {
-  return (
-    <svg
-      aria-hidden
-      className="pointer-events-none absolute top-1/2 right-2 size-3 -translate-y-1/2 text-[#8b949e]"
-      viewBox="0 0 16 16"
-      fill="currentColor"
-    >
-      <path d="M4.427 6.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 6H4.604a.25.25 0 00-.177.427z" />
-    </svg>
-  );
-}
-
+/** 캡처 preview 2행 — Chromatic/Storybook식 툴바 */
 export function ScratchDevCompareBar({
   disabled,
   isComparing,
   isLoadingLatest,
-  featureMode,
-  overlayStackMode,
+  captureViewMode,
   diffMetricsText,
-  hasCompareResult,
   onCompare,
-  onFeatureModeChange,
-  onOverlayStackModeChange,
+  onCaptureViewModeChange,
   onInstallBrowsers,
   isInstallingBrowsers,
   showInstallBrowsers,
@@ -43,28 +22,33 @@ export function ScratchDevCompareBar({
   disabled?: boolean;
   isComparing: boolean;
   isLoadingLatest: boolean;
-  hasCompareResult: boolean;
-  featureMode: ScratchCompareFeatureMode;
-  overlayStackMode: ScratchOverlayStackMode;
+  captureViewMode: ScratchCaptureViewMode;
   diffMetricsText: string | null;
   onCompare: () => void;
-  onFeatureModeChange: (mode: ScratchCompareFeatureMode) => void;
-  onOverlayStackModeChange: (mode: ScratchOverlayStackMode) => void;
+  onCaptureViewModeChange: (mode: ScratchCaptureViewMode) => void;
   onInstallBrowsers?: () => void;
   isInstallingBrowsers?: boolean;
   showInstallBrowsers?: boolean;
 }) {
+  const busy = disabled || isComparing || isLoadingLatest;
+
   return (
     <div
-      className={GITHUB_COMPARE_BAR_CLASS}
+      className="mt-2 flex flex-wrap items-center gap-2"
       role="group"
-      aria-label="픽셀 캡처 (로컬 dev)"
+      aria-label="캡처 도구"
     >
+      <ScratchCaptureViewModeSwitch
+        value={captureViewMode}
+        disabled={disabled}
+        onChange={onCaptureViewModeChange}
+      />
+
       <button
         type="button"
-        className={GITHUB_COMPARE_CAPTURE_BTN_CLASS}
-        disabled={disabled || isComparing || isLoadingLatest}
-        title="Playwright로 source/result·diff PNG를 .diffify에 저장한다 (npm run dev 전용)."
+        className={SCRATCH_TOOLBAR_BTN_PRIMARY_CLASS}
+        disabled={busy}
+        title="Playwright로 source/result·diff PNG를 .diffify에 저장한다."
         onClick={onCompare}
       >
         {isComparing
@@ -74,61 +58,19 @@ export function ScratchDevCompareBar({
             : '새로 캡처'}
       </button>
 
-      <div className={GITHUB_COMPARE_SELECT_WRAP_CLASS}>
-        <label className="sr-only" htmlFor="scratch-compare-mode">
-          비교 모드
-        </label>
-        <select
-          id="scratch-compare-mode"
-          className={GITHUB_COMPARE_SELECT_CLASS}
-          value={featureMode}
-          disabled={disabled}
-          onChange={(e) =>
-            onFeatureModeChange(e.target.value as ScratchCompareFeatureMode)
-          }
+      {diffMetricsText ? (
+        <span
+          className={`${SCRATCH_DIFF_METRICS_BADGE_CLASS} ml-auto`}
+          title="마지막 캡처 픽셀 diff 요약"
         >
-          <option value="overlay" className="bg-[#161b22]">
-            오버레이
-          </option>
-          <option value="pixel-diff" className="bg-[#161b22]">
-            픽셀 diff
-          </option>
-        </select>
-        <SelectChevron />
-      </div>
-
-      {hasCompareResult && featureMode === 'overlay' ? (
-        <label
-          className={`${GITHUB_COMPARE_SEGMENT_CLASS} h-full cursor-pointer gap-1.5 text-[11px] text-[#e6edf3]`}
-        >
-          <input
-            type="checkbox"
-            checked={overlayStackMode === 'live'}
-            disabled={disabled}
-            className="size-3.5 shrink-0 accent-[#388bfd]"
-            onChange={(e) =>
-              onOverlayStackModeChange(e.target.checked ? 'live' : 'capture')
-            }
-          />
-          라이브
-        </label>
+          {diffMetricsText}
+        </span>
       ) : null}
-
-      <span
-        className={`${GITHUB_COMPARE_METRICS_CLASS} h-full`}
-        title={
-          diffMetricsText
-            ? '마지막 캡처 픽셀 diff 요약'
-            : '캡처 후 diff %·px가 표시된다'
-        }
-      >
-        {diffMetricsText ?? '—'}
-      </span>
 
       {showInstallBrowsers && onInstallBrowsers ? (
         <button
           type="button"
-          className={`${GITHUB_BTN_CLASS} h-full shrink-0 border-l border-[#30363d] text-[#d29922]`}
+          className={`${SCRATCH_TOOLBAR_BTN_GHOST_CLASS} ${diffMetricsText ? '' : 'ml-auto'}`}
           disabled={disabled || isInstallingBrowsers}
           title="npm exec playwright install chromium"
           onClick={onInstallBrowsers}
