@@ -36,7 +36,7 @@ export function ScratchEditorPaneBar({
   onTogglePane: (pane: ScratchPaneId) => void;
 }) {
   return (
-    <div className="shrink-0 border-b border-slate-600/80 bg-slate-800 px-4 py-1.5 font-mono">
+    <div className="shrink-0 border-b border-slate-600/80 bg-slate-800 px-4 py-1.5 font-sans">
       <div
         className="inline-flex overflow-hidden rounded border border-slate-600"
         role="group"
