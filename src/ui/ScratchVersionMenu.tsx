@@ -3,24 +3,25 @@ import {
   type ScratchVersionMeta,
 } from '../lib/scratch-version-storage';
 import { ScratchPanelSelect } from './ScratchPanelSelect';
-import { NavMenuChevron, ScratchNavPopover } from './ScratchNavPopover';
+import { ScratchNavPopover } from './ScratchNavPopover';
 import {
   GITHUB_DIRTY_BADGE_CLASS,
+  NAV_MENU_GROUP_POPOVER_WRAP_CLASS,
+  NAV_MENU_GROUP_TRIGGER_END,
   NAV_MENU_ITEM_CLASS,
-  NAV_MENU_TRIGGER_CLASS,
 } from './scratch-github-ui';
 
 const PANEL_CLASS = 'min-w-[14rem] px-3 py-2.5 font-sans';
 
-function versionTriggerLabel(meta: ScratchVersionMeta, dirty: boolean): string {
-  if (dirty) return 'draft';
+function versionTitle(meta: ScratchVersionMeta, dirty: boolean): string {
+  if (dirty) return 'version: draft — 확정 버전과 편집 내용이 다름';
   if (!meta.currentEntryId) {
-    return meta.versionLine.length > 0 ? '버전' : '버전 없음';
+    return meta.versionLine.length > 0 ? 'version' : 'version: 없음';
   }
   const entry = meta.versionLine.find(
     (e) => e.entryId === meta.currentEntryId,
   );
-  return entry?.label ?? '버전';
+  return entry ? `version: ${entry.label}` : 'version';
 }
 
 export function ScratchVersionMenu({
@@ -42,13 +43,14 @@ export function ScratchVersionMenu({
     ? SCRATCH_VERSION_DRAFT_VALUE
     : (meta.currentEntryId ?? '');
   const selectEnabled = !disabled && (dirty || hasVersions);
-  const triggerLabel = versionTriggerLabel(meta, dirty);
+  const title = versionTitle(meta, dirty);
   const versionLineNewestFirst = [...versionLine].reverse();
 
   return (
     <ScratchNavPopover
       align="start"
       panelClassName={PANEL_CLASS}
+      wrapClassName={NAV_MENU_GROUP_POPOVER_WRAP_CLASS}
       trigger={({ open, toggle, triggerId, panelId }) => (
         <button
           id={triggerId}
@@ -58,25 +60,17 @@ export function ScratchVersionMenu({
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-controls={open ? panelId : undefined}
-          className={`${NAV_MENU_TRIGGER_CLASS} max-w-[10rem]`}
-          title={
-            dirty
-              ? '편집 중(draft) — 확정 버전과 내용이 다름'
-              : `버전: ${triggerLabel}`
-          }
+          className={NAV_MENU_GROUP_TRIGGER_END}
+          title={title}
+          aria-label={title}
         >
+          version
           {dirty ? (
             <span
-              className="size-1.5 shrink-0 rounded-full bg-[#d29922]"
+              className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-[#d29922] ring-1 ring-[#21262d]"
               aria-hidden
             />
           ) : null}
-          <span
-            className={`min-w-0 truncate ${dirty ? 'text-[#d29922]' : ''}`}
-          >
-            {triggerLabel}
-          </span>
-          <NavMenuChevron open={open} />
         </button>
       )}
     >

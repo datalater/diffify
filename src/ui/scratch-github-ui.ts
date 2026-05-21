@@ -6,6 +6,10 @@ export const GITHUB_CANVAS = '#161b22';
 export const GITHUB_TOOLBAR_GROUP_CLASS =
   'inline-flex h-8 items-stretch overflow-hidden rounded-md border border-[#30363d] bg-[#21262d] font-sans text-xs shadow-sm';
 
+/** Project|version — popover가 잘리지 않도록 overflow-visible */
+export const NAV_WORKSPACE_MENU_GROUP_CLASS =
+  'inline-flex h-8 items-stretch overflow-visible rounded-md border border-[#30363d] bg-[#21262d] font-sans text-xs shadow-sm';
+
 export const GITHUB_BTN_CLASS =
   'inline-flex items-center px-3 font-medium text-[#e6edf3] transition-colors hover:bg-[#30363d] focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#388bfd] disabled:cursor-not-allowed disabled:text-[#484f58] disabled:hover:bg-transparent';
 
@@ -20,6 +24,17 @@ export const GITHUB_SELECT_CLASS =
 
 export const NAV_MENU_TRIGGER_CLASS =
   'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-[#30363d] bg-[#21262d] px-3 text-xs font-medium text-[#e6edf3] shadow-sm transition-colors hover:bg-[#30363d] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#388bfd]';
+
+const NAV_MENU_GROUP_TRIGGER_BASE =
+  'inline-flex h-full cursor-pointer items-center px-3 text-xs font-medium text-[#e6edf3] transition-colors hover:bg-[#30363d] focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#388bfd] disabled:cursor-not-allowed disabled:text-[#484f58] disabled:hover:bg-transparent';
+
+/** Project | version 묶음 — 왼쪽 세그먼트 */
+export const NAV_MENU_GROUP_TRIGGER_START = `${NAV_MENU_GROUP_TRIGGER_BASE} border-r border-[#30363d]`;
+
+/** Project | version 묶음 — 오른쪽 세그먼트 */
+export const NAV_MENU_GROUP_TRIGGER_END = `${NAV_MENU_GROUP_TRIGGER_BASE} relative`;
+
+export const NAV_MENU_GROUP_POPOVER_WRAP_CLASS = 'relative inline-flex h-full';
 
 /** 위치(align/side)는 ScratchNavPopover가 붙임 */
 export const NAV_PANEL_BASE_CLASS =

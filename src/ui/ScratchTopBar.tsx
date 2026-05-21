@@ -5,6 +5,7 @@ import type {
   ScratchPersistedContent,
 } from '../lib/scratch-persist';
 import type { ScratchProjectRegistry } from '../lib/scratch-project-registry';
+import { NAV_WORKSPACE_MENU_GROUP_CLASS } from './scratch-github-ui';
 import { ScratchLocalStorageMenu } from './ScratchLocalStorageMenu';
 import { ScratchProjectMenu } from './ScratchProjectMenu';
 import { ScratchShareMenu } from './ScratchShareMenu';
@@ -57,12 +58,12 @@ export function ScratchTopBar({
     <nav className="border-b border-[#30363d] bg-[#161b22] font-sans text-[13px] text-[#e6edf3]">
       <div className="flex w-full items-center gap-2 px-4 py-2 min-h-[2.75rem]">
         <span className="shrink-0 text-sm font-semibold tracking-tight text-[#e6edf3]">
-          diffify scratch
+          diffify
         </span>
 
         {projectRegistry ? (
           <div
-            className="flex min-w-0 flex-1 items-center gap-2 overflow-visible"
+            className={`${NAV_WORKSPACE_MENU_GROUP_CLASS} shrink-0`}
             role="group"
             aria-label="워크스페이스"
           >

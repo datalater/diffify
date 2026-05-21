@@ -19,6 +19,7 @@ export function ScratchNavPopover({
   children,
   panelClassName,
   align = 'start',
+  wrapClassName,
 }: {
   trigger: (state: {
     open: boolean;
@@ -30,6 +31,7 @@ export function ScratchNavPopover({
   panelClassName?: string;
   /** start = 왼쪽 정렬, end = 오른쪽 정렬 (공유 메뉴 등) */
   align?: PopoverAlign;
+  wrapClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -82,7 +84,10 @@ export function ScratchNavPopover({
   }, [open, close]);
 
   return (
-    <div ref={rootRef} className="relative inline-flex overflow-visible">
+    <div
+      ref={rootRef}
+      className={`relative inline-flex overflow-visible ${wrapClassName ?? ''}`}
+    >
       {trigger({ open, toggle, triggerId, panelId })}
       {open ? (
         <div
@@ -101,10 +106,16 @@ export function ScratchNavPopover({
 
 export { NAV_MENU_TRIGGER_CLASS } from './scratch-github-ui';
 
-export function NavMenuChevron({ open }: { open: boolean }) {
+export function NavMenuChevron({
+  open,
+  className,
+}: {
+  open: boolean;
+  className?: string;
+}) {
   return (
     <span
-      className={`text-[#8b949e] transition ${open ? 'rotate-180' : ''}`}
+      className={`shrink-0 text-[#8b949e] transition ${open ? 'rotate-180' : ''} ${className ?? ''}`}
       aria-hidden
     >
       <svg className="size-3" viewBox="0 0 16 16" fill="currentColor">

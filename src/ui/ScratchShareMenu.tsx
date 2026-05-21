@@ -18,11 +18,11 @@ import {
   type ScratchEditors,
   type ScratchPersistedContent,
 } from "../lib/scratch-persist";
+import { NAV_MENU_TRIGGER_CLASS, ScratchNavPopover } from "./ScratchNavPopover";
 import {
-  NavMenuChevron,
-  NAV_MENU_TRIGGER_CLASS,
-  ScratchNavPopover,
-} from "./ScratchNavPopover";
+  NavShareIcon,
+  NAV_MENU_ICON_TRIGGER_CLASS,
+} from "./scratch-topbar-icons";
 import { settleSubmenuInViewport } from "./popover-viewport";
 import {
   NAV_MENU_ITEM_CLASS,
@@ -78,7 +78,7 @@ export function ScratchShareMenu({
     }
     const failureReason = exportScratchHtmlFailureReason(result);
     if (failureReason === "aborted") return;
-    onNotify("파일보내기에 실패했다.");
+    onNotify("파일 내보내기에 실패했다.");
   };
 
   const handleImport = async (layer: ScratchHtmlLayer) => {
@@ -111,11 +111,11 @@ export function ScratchShareMenu({
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-controls={open ? panelId : undefined}
-          className={NAV_MENU_TRIGGER_CLASS}
-          title="공유·가져오기·보내기"
+          className={`${NAV_MENU_TRIGGER_CLASS} ${NAV_MENU_ICON_TRIGGER_CLASS}`}
+          title="공유·가져오기·내보내기"
+          aria-label="공유·가져오기·내보내기"
         >
-          공유
-          <NavMenuChevron open={open} />
+          <NavShareIcon />
         </button>
       )}
     >
@@ -134,7 +134,7 @@ export function ScratchShareMenu({
           URL 복사
         </button>
         <ShareFlyoutMenu
-          label="보내기"
+          label="내보내기"
           submenuExpand="start"
           onSelect={(layer) => void handleExport(layer)}
         />

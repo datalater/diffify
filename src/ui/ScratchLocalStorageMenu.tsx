@@ -5,8 +5,9 @@ import {
   formatWorkspaceStorageBytes,
   type ScratchWorkspaceStorageInfo,
 } from '../lib/scratch-workspace-storage';
-import { NavMenuChevron, ScratchNavPopover } from './ScratchNavPopover';
+import { ScratchNavPopover } from './ScratchNavPopover';
 import { NAV_MENU_TRIGGER_CLASS } from './scratch-github-ui';
+import { NavDatabaseIcon, NAV_MENU_ICON_TRIGGER_CLASS } from './scratch-topbar-icons';
 
 const PANEL_CLASS = 'min-w-[18rem] max-w-[22rem] px-0 py-0 font-sans';
 
@@ -162,11 +163,11 @@ export function ScratchLocalStorageMenu({
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-controls={open ? panelId : undefined}
-          className={NAV_MENU_TRIGGER_CLASS}
+          className={`${NAV_MENU_TRIGGER_CLASS} ${NAV_MENU_ICON_TRIGGER_CLASS}`}
           title="브라우저에 저장된 프로젝트·draft·버전"
+          aria-label="로컬 저장소"
         >
-          로컬 저장소
-          <NavMenuChevron open={open} />
+          <NavDatabaseIcon />
         </button>
       )}
     >

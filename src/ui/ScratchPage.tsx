@@ -76,7 +76,10 @@ import {
   ScratchEditorColumn,
   SCRATCH_ACTION_BTN_CLASS,
 } from "./ScratchEditorColumn";
-import { ScratchEditorPaneBar, ScratchPaneEmptyState } from "./ScratchEditorPaneBar";
+import {
+  ScratchEditorPaneBar,
+  ScratchPaneEmptyState,
+} from "./ScratchEditorPaneBar";
 import {
   countVisibleEditorPanes,
   countVisibleScratchPanes,
@@ -162,10 +165,12 @@ export function ScratchPage() {
   const [showingSource, setShowingSource] = useState(defaults.showingSource);
   const [previewWidth, setPreviewWidth] = useState(defaults.previewWidth);
   const [previewHeight, setPreviewHeight] = useState(defaults.previewHeight);
-  const [previewWidthMode, setPreviewWidthMode] =
-    useState<PreviewWidthMode>(DEFAULT_PREVIEW_WIDTH_MODE);
-  const [previewHeightMode, setPreviewHeightMode] =
-    useState<PreviewHeightMode>(DEFAULT_PREVIEW_HEIGHT_MODE);
+  const [previewWidthMode, setPreviewWidthMode] = useState<PreviewWidthMode>(
+    DEFAULT_PREVIEW_WIDTH_MODE,
+  );
+  const [previewHeightMode, setPreviewHeightMode] = useState<PreviewHeightMode>(
+    DEFAULT_PREVIEW_HEIGHT_MODE,
+  );
   const [status, setStatus] = useState("");
   const [loadProgress, setLoadProgress] = useState<ScratchLoadProgress | null>(
     () => initialScratchLoadProgress(),
@@ -184,16 +189,11 @@ export function ScratchPage() {
     useState<ScratchPreviewSubstrate>("code");
   const viewportKey = useMemo(
     () =>
-      scratchViewportKey(
-        previewWidth,
-        previewHeight,
-        captureDeviceScaleFactor,
-      ),
+      scratchViewportKey(previewWidth, previewHeight, captureDeviceScaleFactor),
     [previewWidth, previewHeight, captureDeviceScaleFactor],
   );
-  const [compareResult, setCompareResult] = useState<ScratchCompareResult | null>(
-    null,
-  );
+  const [compareResult, setCompareResult] =
+    useState<ScratchCompareResult | null>(null);
   const [isComparing, setIsComparing] = useState(false);
   const [isLoadingLatestCompare, setIsLoadingLatestCompare] = useState(false);
   const [captureViewMode, setCaptureViewMode] =
@@ -290,9 +290,7 @@ export function ScratchPage() {
     setActiveProjectIdState(registry.activeProjectId);
     const projectId = registry.activeProjectId;
 
-    const urlEncoded = new URLSearchParams(window.location.search).get(
-      "state",
-    );
+    const urlEncoded = new URLSearchParams(window.location.search).get("state");
     let urlSnap: ScratchPersistSnapshot | null = null;
     if (urlEncoded) {
       reportLoadProgress({
@@ -328,14 +326,9 @@ export function ScratchPage() {
       const project = registry.projects.find(
         (p) => p.id === registry.activeProjectId,
       );
-      await loadProjectWorkspace(
-        registry.activeProjectId,
-        null,
-        project?.name,
-      );
+      await loadProjectWorkspace(registry.activeProjectId, null, project?.name);
     } catch (error) {
-      const detail =
-        error instanceof Error ? error.message : "알 수 없는 오류";
+      const detail = error instanceof Error ? error.message : "알 수 없는 오류";
       setStatus(`워크스페이스를 불러오지 못했다. (${detail})`);
     }
   }, [loadProjectWorkspace]);
@@ -580,10 +573,7 @@ export function ScratchPage() {
 
   const handleCreateVersion = useCallback(async () => {
     if (!activeProjectId) return;
-    const result = await commitScratchVersion(
-      documentContent,
-      activeProjectId,
-    );
+    const result = await commitScratchVersion(documentContent, activeProjectId);
     if (!result) {
       setStatus("버전을 저장하지 못했다 (IndexedDB·용량).");
       return;
@@ -646,12 +636,7 @@ export function ScratchPage() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [
-    paneVisibility.preview,
-    isDevCompare,
-    previewSubstrate,
-    captureViewMode,
-  ]);
+  }, [paneVisibility.preview, isDevCompare, previewSubstrate, captureViewMode]);
 
   const diffMetricsText =
     compareResult?.pixelDiff == null
@@ -765,7 +750,7 @@ export function ScratchPage() {
     }
     if (result.reason === "too_long") {
       setStatus(
-        "?state= 값이 12,000자를 넘어 URL 복사가 불가능하다. HTML 보내기·가져오기를 사용한다.",
+        "?state= 값이 12,000자를 넘어 URL 복사가 불가능하다. HTML 내보내기·가져오기를 사용한다.",
       );
       return;
     }

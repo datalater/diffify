@@ -1,13 +1,17 @@
 import type { ScratchProjectRegistry } from '../lib/scratch-project-registry';
 import { ScratchPanelSelect } from './ScratchPanelSelect';
-import { NavMenuChevron, ScratchNavPopover } from './ScratchNavPopover';
-import { NAV_MENU_ITEM_CLASS, NAV_MENU_TRIGGER_CLASS } from './scratch-github-ui';
+import { ScratchNavPopover } from './ScratchNavPopover';
+import {
+  NAV_MENU_GROUP_POPOVER_WRAP_CLASS,
+  NAV_MENU_GROUP_TRIGGER_START,
+  NAV_MENU_ITEM_CLASS,
+} from './scratch-github-ui';
 
 const PANEL_CLASS = 'min-w-[14rem] px-3 py-2.5 font-sans';
 
-function projectTriggerLabel(registry: ScratchProjectRegistry): string {
+function projectTitle(registry: ScratchProjectRegistry): string {
   const active = registry.projects.find((p) => p.id === registry.activeProjectId);
-  return active?.name ?? '프로젝트';
+  return active ? `Project: ${active.name}` : 'Project';
 }
 
 export function ScratchProjectMenu({
@@ -21,12 +25,13 @@ export function ScratchProjectMenu({
   onSelectProject: (projectId: string) => void;
   onCreateProject: () => void;
 }) {
-  const label = projectTriggerLabel(registry);
+  const title = projectTitle(registry);
 
   return (
     <ScratchNavPopover
       align="start"
       panelClassName={PANEL_CLASS}
+      wrapClassName={NAV_MENU_GROUP_POPOVER_WRAP_CLASS}
       trigger={({ open, toggle, triggerId, panelId }) => (
         <button
           id={triggerId}
@@ -36,11 +41,11 @@ export function ScratchProjectMenu({
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-controls={open ? panelId : undefined}
-          className={`${NAV_MENU_TRIGGER_CLASS} max-w-[12rem]`}
-          title={`프로젝트: ${label}`}
+          className={NAV_MENU_GROUP_TRIGGER_START}
+          title={title}
+          aria-label={title}
         >
-          <span className="min-w-0 truncate">{label}</span>
-          <NavMenuChevron open={open} />
+          Project
         </button>
       )}
     >
