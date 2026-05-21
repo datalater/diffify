@@ -1,7 +1,6 @@
 export type ScratchLoadPhase =
   | 'projects'
   | 'url-state'
-  | 'migrate-blobs'
   | 'storage'
   | 'workspace'
   | 'dirty'
@@ -12,45 +11,23 @@ export type ScratchLoadProgress = {
   message: string;
   /** 0–100; omitted when indeterminate */
   percent?: number;
-  done?: number;
-  total?: number;
   indeterminate?: boolean;
 };
 
 export type ScratchLoadProgressCallback = (progress: ScratchLoadProgress) => void;
 
 const SEGMENT_END: Record<Exclude<ScratchLoadPhase, 'error'>, number> = {
-  projects: 8,
-  'url-state': 15,
-  'migrate-blobs': 70,
-  storage: 78,
-  workspace: 92,
+  projects: 10,
+  'url-state': 20,
+  storage: 35,
+  workspace: 90,
   dirty: 100,
-};
-
-const SEGMENT_START: Record<Exclude<ScratchLoadPhase, 'error'>, number> = {
-  projects: 0,
-  'url-state': 8,
-  'migrate-blobs': 15,
-  storage: 70,
-  workspace: 78,
-  dirty: 92,
 };
 
 export function computeScratchLoadPercent(
   phase: Exclude<ScratchLoadPhase, 'error'>,
-  migrate?: { done: number; total: number },
 ): number {
-  const start = SEGMENT_START[phase];
-  const end = SEGMENT_END[phase];
-  const size = end - start;
-
-  if (phase === 'migrate-blobs' && migrate && migrate.total > 0) {
-    const ratio = Math.min(1, Math.max(0, migrate.done / migrate.total));
-    return Math.round(start + size * ratio);
-  }
-
-  return end;
+  return SEGMENT_END[phase];
 }
 
 export function initialScratchLoadProgress(): ScratchLoadProgress {

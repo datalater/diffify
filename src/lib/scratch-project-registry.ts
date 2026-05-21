@@ -1,9 +1,5 @@
 const REGISTRY_KEY = 'diffify-scratch-projects';
 
-const LEGACY_META_KEY = 'diffify-scratch-meta';
-const LEGACY_DRAFT_KEY = 'diffify-scratch-draft';
-const LEGACY_UI_KEY = 'diffify-scratch-ui';
-
 export type ScratchProjectSummary = {
   id: string;
   name: string;
@@ -16,7 +12,15 @@ export type ScratchProjectRegistry = {
   projects: ScratchProjectSummary[];
 };
 
-let migrateProjectsPromise: Promise<ScratchProjectRegistry> | null = null;
+let projectsReadyPromise: Promise<ScratchProjectRegistry> | null = null;
+
+export function resetScratchProjectsModuleState(): void {
+  projectsReadyPromise = null;
+}
+
+export function tryReadProjectRegistry(): ScratchProjectRegistry | null {
+  return readRegistryRaw();
+}
 
 function readRegistryRaw(): ScratchProjectRegistry | null {
   try {
@@ -49,14 +53,6 @@ function createProjectSummary(name: string): ScratchProjectSummary {
     name: name.trim() || '새 프로젝트',
     createdAt: Date.now(),
   };
-}
-
-function copyLegacyKey(from: string, to: string): void {
-  const value = localStorage.getItem(from);
-  if (value !== null) {
-    localStorage.setItem(to, value);
-    localStorage.removeItem(from);
-  }
 }
 
 export function projectMetaKey(projectId: string): string {
@@ -139,9 +135,9 @@ export function renameScratchProject(
 
 /** 전역 localStorage 키 → 첫 프로젝트 스코프 (IDB는 version-storage에서) */
 export async function ensureScratchProjectsReady(): Promise<ScratchProjectRegistry> {
-  if (migrateProjectsPromise) return migrateProjectsPromise;
+  if (projectsReadyPromise) return projectsReadyPromise;
 
-  migrateProjectsPromise = (async () => {
+  projectsReadyPromise = (async () => {
     const existing = readRegistryRaw();
     if (existing && existing.projects.length > 0) {
       const activeExists = existing.projects.some(
@@ -150,27 +146,15 @@ export async function ensureScratchProjectsReady(): Promise<ScratchProjectRegist
       if (activeExists) return existing;
     }
 
-    const project = createProjectSummary(
-      existing?.projects[0]?.name ?? defaultAutoProjectName(1),
-    );
-    const projectId = existing?.projects[0]?.id ?? project.id;
-    const summary: ScratchProjectSummary = existing?.projects[0] ?? {
-      ...project,
-      id: projectId,
-    };
-
-    copyLegacyKey(LEGACY_META_KEY, projectMetaKey(projectId));
-    copyLegacyKey(LEGACY_DRAFT_KEY, projectDraftKey(projectId));
-    copyLegacyKey(LEGACY_UI_KEY, projectUiKey(projectId));
-
+    const project = createProjectSummary(defaultAutoProjectName(1));
     const registry: ScratchProjectRegistry = {
       v: 1,
-      activeProjectId: projectId,
-      projects: [summary],
+      activeProjectId: project.id,
+      projects: [project],
     };
     writeProjectRegistry(registry);
     return registry;
   })();
 
-  return migrateProjectsPromise;
+  return projectsReadyPromise;
 }

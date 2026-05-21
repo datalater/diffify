@@ -34,7 +34,6 @@ export type ScratchPersistSnapshot = ScratchPersistedContent & {
   previewHeight: number;
 };
 
-const STORAGE_KEY = 'diffify-scratch-v1';
 const SEARCH_PARAM = 'state';
 const PERSIST_VERSION = 2 as const;
 export const MAX_URL_STATE_CHARS = 12_000;
@@ -180,37 +179,6 @@ export async function decodeScratchState(
   }
 }
 
-export function readScratchFromLocalStorage(): ScratchPersistSnapshot | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const payload = JSON.parse(raw) as unknown;
-    if (!isPersistPayload(payload)) return null;
-    return scratchSnapshotFromContent(contentFromPayload(payload));
-  } catch {
-    return null;
-  }
-}
-
-export function writeScratchToLocalStorage(
-  content: ScratchPersistedContent,
-): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toPayload(content)));
-  } catch {
-    /* quota */
-  }
-}
-
-export async function loadScratchInitialSnapshot(): Promise<ScratchPersistSnapshot | null> {
-  const fromUrl = new URLSearchParams(window.location.search).get(SEARCH_PARAM);
-  if (fromUrl) {
-    const decoded = await decodeScratchState(fromUrl);
-    if (decoded) return decoded;
-  }
-  return readScratchFromLocalStorage();
-}
-
 export const defaultScratchSnapshot = (): ScratchPersistSnapshot =>
   scratchSnapshotFromContent({
     sourceHead: DEFAULT_FIGMA_SOURCE_HEAD,
@@ -219,29 +187,6 @@ export const defaultScratchSnapshot = (): ScratchPersistSnapshot =>
     resultHtml: '',
     showingSource: true,
   });
-
-export type PersistScratchResult = {
-  urlUpdated: boolean;
-  urlSkippedReason?: 'too_long';
-};
-
-export async function persistScratchState(
-  content: ScratchPersistedContent,
-): Promise<PersistScratchResult> {
-  writeScratchToLocalStorage(content);
-  const encoded = await encodeScratchState(content);
-  const url = new URL(window.location.href);
-
-  if (encoded.length > MAX_URL_STATE_CHARS) {
-    url.searchParams.delete(SEARCH_PARAM);
-    history.replaceState(null, '', url.toString());
-    return { urlUpdated: false, urlSkippedReason: 'too_long' };
-  }
-
-  url.searchParams.set(SEARCH_PARAM, encoded);
-  history.replaceState(null, '', url.toString());
-  return { urlUpdated: true };
-}
 
 export async function copyScratchShareUrl(
   content: ScratchPersistedContent,

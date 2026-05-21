@@ -318,6 +318,27 @@ export function ScratchPage() {
     setPreviewHeightMode(DEFAULT_PREVIEW_HEIGHT_MODE);
   }, [loadProjectWorkspace, reportLoadProgress]);
 
+  const handleWorkspaceStorageCleared = useCallback(async () => {
+    setCompareResult(null);
+    try {
+      const registry = await ensureScratchProjectsReady();
+      setProjectRegistry(registry);
+      setActiveProjectIdState(registry.activeProjectId);
+      const project = registry.projects.find(
+        (p) => p.id === registry.activeProjectId,
+      );
+      await loadProjectWorkspace(
+        registry.activeProjectId,
+        null,
+        project?.name,
+      );
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "알 수 없는 오류";
+      setStatus(`워크스페이스를 불러오지 못했다. (${detail})`);
+    }
+  }, [loadProjectWorkspace]);
+
   const reloadProjectWorkspace = useCallback(
     async (projectId: string, projectLabel?: string) => {
       setShowLoadOverlay(false);
@@ -748,7 +769,7 @@ export function ScratchPage() {
     }
     if (result.reason === "too_long") {
       setStatus(
-        "?state= 값이 12,000자를 넘어 URL 복사가 불가능하다. 보내기·localStorage를 사용한다.",
+        "?state= 값이 12,000자를 넘어 URL 복사가 불가능하다. HTML 보내기·가져오기를 사용한다.",
       );
       return;
     }
@@ -804,6 +825,8 @@ export function ScratchPage() {
         projectRegistry={projectRegistry}
         onSelectProject={(id) => void handleSelectProject(id)}
         onCreateProject={() => void handleCreateProject()}
+        workspaceStorageDisabled={!hydrated}
+        onWorkspaceStorageCleared={() => void handleWorkspaceStorageCleared()}
       />
 
       <ScratchEditorPaneBar

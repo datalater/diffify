@@ -18,10 +18,8 @@ import {
   type ScratchLoadProgressCallback,
 } from './scratch-load-progress';
 import {
-  contentFromPayload,
   defaultScratchSnapshot,
   type ScratchEditors,
-  type ScratchPersistPayload,
   type ScratchPersistSnapshot,
 } from './scratch-persist';
 
@@ -40,17 +38,42 @@ export type ScratchVersionMeta = {
   currentEntryId: string | null;
 };
 
-const LEGACY_KEY = 'diffify-scratch-v1';
-
 const IDB_NAME = 'diffify-scratch';
-const IDB_VERSION = 2;
+const IDB_VERSION = 1;
 const BLOB_STORE = 'blobs';
 
 const MAX_VERSION_LINE = 50;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
-let migratePromise: Promise<void> | null = null;
-let idbLegacyMigrated = false;
+let storageReadyPromise: Promise<void> | null = null;
+
+export function resetScratchStorageModuleState(): void {
+  dbPromise = null;
+  storageReadyPromise = null;
+}
+
+export async function countScratchIdbBlobs(): Promise<number> {
+  if (typeof indexedDB === 'undefined') return 0;
+  try {
+    const db = await openDatabase();
+    const tx = db.transaction(BLOB_STORE, 'readonly');
+    return await idbRequest(tx.objectStore(BLOB_STORE).count());
+  } catch {
+    return 0;
+  }
+}
+
+export async function deleteScratchIndexedDb(): Promise<void> {
+  if (typeof indexedDB === 'undefined') return;
+  resetScratchStorageModuleState();
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(IDB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () =>
+      reject(request.error ?? new Error('indexedDB delete failed'));
+    request.onblocked = () => resolve();
+  });
+}
 
 type BlobRecord = {
   id: string;
@@ -64,10 +87,9 @@ function openDatabase(): Promise<IDBDatabase> {
     const request = indexedDB.open(IDB_NAME, IDB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (db.objectStoreNames.contains(BLOB_STORE)) {
-        db.deleteObjectStore(BLOB_STORE);
+      if (!db.objectStoreNames.contains(BLOB_STORE)) {
+        db.createObjectStore(BLOB_STORE, { keyPath: 'id' });
       }
-      db.createObjectStore(BLOB_STORE, { keyPath: 'id' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () =>
@@ -129,81 +151,6 @@ async function getBlobByHash(
   }
 }
 
-function reportMigrateProgress(
-  onProgress: ScratchLoadProgressCallback | undefined,
-  done: number,
-  total: number,
-): void {
-  if (!onProgress) return;
-  onProgress({
-    phase: 'migrate-blobs',
-    message:
-      total > 0
-        ? '저장소 데이터 이전 중…'
-        : '저장소 확인 중…',
-    percent: computeScratchLoadPercent('migrate-blobs', { done, total }),
-    done,
-    total,
-    indeterminate: total === 0,
-  });
-}
-
-async function migrateLegacyIdbBlobs(
-  projectId: string,
-  onProgress?: ScratchLoadProgressCallback,
-): Promise<void> {
-  if (idbLegacyMigrated || typeof indexedDB === 'undefined') return;
-  idbLegacyMigrated = true;
-
-  reportMigrateProgress(onProgress, 0, 0);
-
-  try {
-    const legacyDb = await new Promise<IDBDatabase | null>((resolve) => {
-      const request = indexedDB.open(IDB_NAME, 1);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => resolve(null);
-      request.onupgradeneeded = () => resolve(null);
-    });
-    if (!legacyDb?.objectStoreNames.contains(BLOB_STORE)) {
-      legacyDb?.close();
-      return;
-    }
-
-    const rows = await new Promise<
-      Array<{ hash: string; content: ScratchEditors }>
-    >((resolve, reject) => {
-      const tx = legacyDb.transaction(BLOB_STORE, 'readonly');
-      const req = tx.objectStore(BLOB_STORE).getAll();
-      req.onsuccess = () => {
-        const raw = (req.result as Array<{ hash: string; content: unknown }>) ?? [];
-        resolve(
-          raw
-            .filter((row) => typeof row.hash === 'string' && row.content)
-            .map((row) => ({
-              hash: row.hash,
-              content: normalizeStoredDocument(
-                row.content as ScratchEditors & { showingSource?: boolean },
-              ),
-            })),
-        );
-      };
-      req.onerror = () => reject(req.error);
-    });
-    legacyDb.close();
-
-    const total = rows.length;
-    reportMigrateProgress(onProgress, 0, total);
-
-    for (let i = 0; i < rows.length; i += 1) {
-      const row = rows[i]!;
-      await putBlob(projectId, row.hash, row.content);
-      reportMigrateProgress(onProgress, i + 1, total);
-    }
-  } catch {
-    /* ignore */
-  }
-}
-
 function readScratchVersionMeta(
   projectId = getActiveProjectId(),
 ): ScratchVersionMeta {
@@ -243,9 +190,6 @@ function readScratchDraft(projectId = getActiveProjectId()): ScratchEditors | nu
     if (!raw) return null;
     const payload = JSON.parse(raw) as unknown;
     if (!isDraftPayload(payload)) return null;
-    if ('ls' in payload && (payload.ls === 0 || payload.ls === 1)) {
-      writeScratchShowingSource(payload.ls === 1, projectId);
-    }
     return draftPayloadToDocument(payload);
   } catch {
     return null;
@@ -281,11 +225,7 @@ type ScratchDraftPayloadV2 = {
   rx: string;
 };
 
-type ScratchDraftPayloadLegacy = ScratchDraftPayloadV2 & { ls: 0 | 1 };
-
-function isDraftPayload(
-  raw: unknown,
-): raw is ScratchDraftPayloadV2 | ScratchDraftPayloadLegacy {
+function isDraftPayload(raw: unknown): raw is ScratchDraftPayloadV2 {
   if (typeof raw !== 'object' || raw === null) return false;
   const p = raw as ScratchDraftPayloadV2;
   return (
@@ -318,19 +258,6 @@ function draftPayloadToDocument(
   };
 }
 
-function isLegacyPayload(raw: unknown): raw is ScratchPersistPayload {
-  if (typeof raw !== 'object' || raw === null) return false;
-  const p = raw as ScratchPersistPayload;
-  return (
-    (p.v === 1 || p.v === 2) &&
-    typeof p.sh === 'string' &&
-    typeof p.sx === 'string' &&
-    typeof p.rh === 'string' &&
-    typeof p.rx === 'string' &&
-    (p.ls === 0 || p.ls === 1)
-  );
-}
-
 function pruneVersionLine(line: ScratchVersionEntry[]): ScratchVersionEntry[] {
   if (line.length <= MAX_VERSION_LINE) return line;
   return line.slice(line.length - MAX_VERSION_LINE);
@@ -349,34 +276,6 @@ export function restoredVersionLabel(
   return `v${versionLineLength + 1}(${sourceLabel} restored)`;
 }
 
-async function migrateLegacyScratchStorage(
-  projectId: string,
-): Promise<void> {
-  const meta = readScratchVersionMeta(projectId);
-  if (meta.versionLine.length > 0 || readScratchDraft(projectId)) return;
-
-  try {
-    const raw = localStorage.getItem(LEGACY_KEY);
-    if (!raw) return;
-    const payload = JSON.parse(raw) as unknown;
-    if (!isLegacyPayload(payload)) return;
-    const legacy = contentFromPayload(payload);
-    writeScratchDraft(
-      {
-        sourceHead: legacy.sourceHead,
-        sourceHtml: legacy.sourceHtml,
-        resultHead: legacy.resultHead,
-        resultHtml: legacy.resultHtml,
-      },
-      projectId,
-    );
-    writeScratchShowingSource(legacy.showingSource, projectId);
-    localStorage.removeItem(LEGACY_KEY);
-  } catch {
-    /* ignore */
-  }
-}
-
 export type EnsureScratchStorageReadyOptions = {
   onProgress?: ScratchLoadProgressCallback;
 };
@@ -385,23 +284,19 @@ export async function ensureScratchStorageReady(
   options?: EnsureScratchStorageReadyOptions,
 ): Promise<void> {
   const onProgress = options?.onProgress;
-  if (migratePromise) return migratePromise;
+  if (storageReadyPromise) return storageReadyPromise;
 
-  migratePromise = (async () => {
-    const registry = await ensureScratchProjectsReady();
-    const projectId = registry.activeProjectId;
-    // v2 open 전에 v1 blob을 읽어야 upgrade 시 데이터가 지워지지 않는다.
-    await migrateLegacyIdbBlobs(projectId, onProgress);
+  storageReadyPromise = (async () => {
+    await ensureScratchProjectsReady();
     onProgress?.({
       phase: 'storage',
       message: '저장소 준비 중…',
       percent: computeScratchLoadPercent('storage'),
     });
     await openDatabase();
-    await migrateLegacyScratchStorage(projectId);
   })();
 
-  return migratePromise;
+  return storageReadyPromise;
 }
 
 export function findVersionEntry(

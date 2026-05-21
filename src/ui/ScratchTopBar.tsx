@@ -5,6 +5,7 @@ import type {
   ScratchPersistedContent,
 } from '../lib/scratch-persist';
 import type { ScratchProjectRegistry } from '../lib/scratch-project-registry';
+import { ScratchLocalStorageMenu } from './ScratchLocalStorageMenu';
 import { ScratchProjectControls } from './ScratchProjectControls';
 import { ScratchShareMenu } from './ScratchShareMenu';
 import { ScratchVersionControls } from './ScratchVersionControls';
@@ -28,6 +29,8 @@ export type ScratchTopBarProps = {
   projectRegistry: ScratchProjectRegistry | null;
   onSelectProject: (projectId: string) => void;
   onCreateProject: () => void;
+  workspaceStorageDisabled?: boolean;
+  onWorkspaceStorageCleared: () => void | Promise<void>;
   trailing?: ReactNode;
 };
 
@@ -46,6 +49,8 @@ export function ScratchTopBar({
   projectRegistry,
   onSelectProject,
   onCreateProject,
+  workspaceStorageDisabled,
+  onWorkspaceStorageCleared,
   trailing,
 }: ScratchTopBarProps) {
   return (
@@ -84,6 +89,11 @@ export function ScratchTopBar({
             onCopyShareUrl={onCopyShareUrl}
             onImportLayer={onImportLayer}
             onNotify={onNotify}
+          />
+          <ScratchLocalStorageMenu
+            disabled={workspaceStorageDisabled}
+            onNotify={onNotify}
+            onCleared={onWorkspaceStorageCleared}
           />
           {trailing}
         </div>

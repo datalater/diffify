@@ -68,4 +68,4 @@ DIFFIFY_CAPTURE_SCALE=2 npm run dev
 
 ## state 포맷
 
-hera `scratch-persist`와 동일 (`diffify-scratch-v1`, `z.` / `u.` prefix).
+`scratch-persist` URL 인코딩 (`z.` / `u.` prefix). 워크스페이스는 `diffify-scratch-projects`·프로젝트별 draft/meta·IndexedDB `diffify-scratch`에 저장한다.

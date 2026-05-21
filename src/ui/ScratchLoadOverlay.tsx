@@ -5,13 +5,9 @@ export function ScratchLoadOverlay({
 }: {
   progress: ScratchLoadProgress;
 }) {
-  const { message, percent, done, total, indeterminate } = progress;
+  const { message, percent, indeterminate } = progress;
   const showDeterminate =
     !indeterminate && typeof percent === 'number' && Number.isFinite(percent);
-  const showCounts =
-    typeof done === 'number' &&
-    typeof total === 'number' &&
-    total > 0;
 
   return (
     <div
@@ -33,18 +29,9 @@ export function ScratchLoadOverlay({
         >
           {message}
         </p>
-        {showCounts ? (
-          <p
-            id="scratch-load-desc"
-            className="mt-1 text-center text-xs text-slate-600"
-          >
-            {done} / {total}
-          </p>
-        ) : (
-          <p id="scratch-load-desc" className="sr-only">
-            불러오는 중
-          </p>
-        )}
+        <p id="scratch-load-desc" className="sr-only">
+          불러오는 중
+        </p>
         <div
           className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200"
           role="progressbar"
