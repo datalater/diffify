@@ -1,9 +1,5 @@
-import {
-  useMemo,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { ScratchCodeEditor } from '../editor/scratch-code-editor';
 import { formatScratchHtmlDocument } from '../lib/format-scratch-html';
 import { createScratchDocument } from '../lib/source-document';
 import { ScratchFullDocumentDialog } from './ScratchFullDocumentDialog';
@@ -12,19 +8,6 @@ export const SCRATCH_ACTION_BTN_CLASS =
   'cursor-pointer rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-800 hover:bg-slate-100';
 
 const FORMAT_SHORTCUT_TITLE = '들여쓰기·줄바꿈 정리 (⌘S / Ctrl+S)';
-
-function isFormatShortcut(event: KeyboardEvent): boolean {
-  return (event.metaKey || event.ctrlKey) && event.key === 's';
-}
-
-function handleFormatShortcut(
-  event: KeyboardEvent,
-  onFormat: (() => void) | undefined,
-): void {
-  if (!onFormat || !isFormatShortcut(event)) return;
-  event.preventDefault();
-  onFormat();
-}
 
 function ScratchFormatButton({ onClick }: { onClick: () => void }) {
   return (
@@ -98,7 +81,7 @@ export function ScratchEditorColumn({
             {disabled ? null : headActions}
           </div>
         </div>
-        <label className="flex min-h-0 flex-col gap-1 text-xs text-slate-700">
+        <div className="flex min-h-0 flex-col gap-1 text-xs text-slate-700">
           <span>
             <code className="rounded bg-slate-200 px-1 text-slate-900">
               &lt;head&gt;
@@ -107,17 +90,18 @@ export function ScratchEditorColumn({
           {headHelp ? (
             <span className="text-[11px] text-slate-500">{headHelp}</span>
           ) : null}
-          <textarea
+          <ScratchCodeEditor
             value={head}
-            onChange={(event) => onHeadChange(event.target.value)}
-            onKeyDown={(event) => handleFormatShortcut(event, onFormatHead)}
-            spellCheck={false}
-            disabled={disabled}
-            className="min-h-28 w-full resize-y rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] leading-snug text-slate-900 focus:outline-2 focus:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+            onChange={onHeadChange}
+            language="html"
+            sizeRole="head"
+            readOnly={disabled}
+            fillHeight={false}
+            onFormatRequest={onFormatHead}
             placeholder={'<meta charset="UTF-8">\n<script src="..."></script>'}
           />
-        </label>
-        <label className="flex min-h-0 flex-1 flex-col gap-1 text-xs text-slate-700">
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-1 text-xs text-slate-700">
           <span className="flex flex-wrap items-center justify-between gap-2">
             <span>
               <code className="rounded bg-slate-200 px-1 text-slate-900">
@@ -131,16 +115,17 @@ export function ScratchEditorColumn({
               {disabled ? null : htmlActions}
             </span>
           </span>
-          <textarea
+          <ScratchCodeEditor
             value={html}
-            onChange={(event) => onHtmlChange(event.target.value)}
-            onKeyDown={(event) => handleFormatShortcut(event, onFormatHtml)}
-            spellCheck={false}
-            disabled={disabled}
-            className={`w-full resize-y rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] leading-snug text-slate-900 focus:outline-2 focus:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-60 ${fillHeight ? 'min-h-40 flex-1' : 'min-h-40'}`}
+            onChange={onHtmlChange}
+            language="html"
+            sizeRole="body"
+            readOnly={disabled}
+            fillHeight={fillHeight}
+            onFormatRequest={onFormatHtml}
             placeholder="<div>...</div>"
           />
-        </label>
+        </div>
       </div>
       <ScratchFullDocumentDialog
         open={fullDocOpen}

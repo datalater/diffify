@@ -84,6 +84,7 @@ import {
   type ScratchPaneId,
   type ScratchPaneVisibility,
 } from "./scratch-pane-visibility";
+import { isScratchEditorTypingTarget } from "../editor/scratch-editor-chrome";
 import { ScratchLoadOverlay } from "./ScratchLoadOverlay";
 import { ScratchTopBar } from "./ScratchTopBar";
 
@@ -630,12 +631,7 @@ export function ScratchPage() {
     if (!paneVisibility.preview) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      const targetTag = (event.target as HTMLElement | null)?.tagName;
-      if (
-        targetTag === "INPUT" ||
-        targetTag === "TEXTAREA" ||
-        targetTag === "SELECT"
-      ) {
+      if (isScratchEditorTypingTarget(event.target)) {
         return;
       }
       if (event.code === "Space" || event.code === "KeyD") {
@@ -842,7 +838,7 @@ export function ScratchPage() {
 
         {visibleEditorPaneCount > 0 ? (
           <main
-            className={`mobile-down:flex-col flex min-h-0 flex-row gap-4 p-4 ${editorsFillHeight || previewOnly ? "flex-1" : "shrink-0"} ${!hydrated ? "pointer-events-none" : ""}`}
+            className={`mobile-down:flex-col flex min-h-0 flex-row gap-4 p-4 ${editorsFillHeight || previewOnly ? "flex-1" : "shrink-0"} ${editorsFillHeight ? "max-h-[95dvh] overflow-auto" : ""} ${!hydrated ? "pointer-events-none" : ""}`}
           >
             {paneVisibility.source ? (
               <ScratchEditorColumn
