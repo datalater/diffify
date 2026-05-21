@@ -6,9 +6,9 @@ import type {
 } from '../lib/scratch-persist';
 import type { ScratchProjectRegistry } from '../lib/scratch-project-registry';
 import { ScratchLocalStorageMenu } from './ScratchLocalStorageMenu';
-import { ScratchProjectControls } from './ScratchProjectControls';
+import { ScratchProjectMenu } from './ScratchProjectMenu';
 import { ScratchShareMenu } from './ScratchShareMenu';
-import { ScratchVersionControls } from './ScratchVersionControls';
+import { ScratchVersionMenu } from './ScratchVersionMenu';
 import type { ScratchVersionMeta } from '../lib/scratch-version-storage';
 
 export type ScratchTopBarProps = {
@@ -55,24 +55,24 @@ export function ScratchTopBar({
 }: ScratchTopBarProps) {
   return (
     <nav className="border-b border-[#30363d] bg-[#161b22] font-sans text-[13px] text-[#e6edf3]">
-      <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2 min-h-[2.75rem]">
-        <span className="mr-1 shrink-0 text-sm font-semibold tracking-tight text-[#e6edf3]">
+      <div className="flex w-full items-center gap-2 px-4 py-2 min-h-[2.75rem]">
+        <span className="shrink-0 text-sm font-semibold tracking-tight text-[#e6edf3]">
           diffify scratch
         </span>
 
         {projectRegistry ? (
           <div
-            className="flex shrink-0 items-center gap-1"
+            className="flex min-w-0 flex-1 items-center gap-2 overflow-visible"
             role="group"
             aria-label="워크스페이스"
           >
-            <ScratchProjectControls
+            <ScratchProjectMenu
               registry={projectRegistry}
               disabled={versionControlsDisabled}
               onSelectProject={onSelectProject}
               onCreateProject={onCreateProject}
             />
-            <ScratchVersionControls
+            <ScratchVersionMenu
               meta={versionMeta}
               dirty={versionDirty}
               disabled={versionControlsDisabled}
@@ -80,9 +80,11 @@ export function ScratchTopBar({
               onSelectValue={onSelectVersionValue}
             />
           </div>
-        ) : null}
+        ) : (
+          <div className="min-w-0 flex-1" aria-hidden />
+        )}
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <ScratchShareMenu
             persistContent={persistContent}
             editors={editors}

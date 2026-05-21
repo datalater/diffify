@@ -82,7 +82,7 @@ export function ScratchNavPopover({
   }, [open, close]);
 
   return (
-    <div ref={rootRef} className="relative inline-flex">
+    <div ref={rootRef} className="relative inline-flex overflow-visible">
       {trigger({ open, toggle, triggerId, panelId })}
       {open ? (
         <div
