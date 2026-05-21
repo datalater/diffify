@@ -10,11 +10,13 @@ export function TextareaScratchEditor({
   value,
   onChange,
   readOnly,
+  disabled,
   placeholder,
   className,
   fillHeight,
   onFormatRequest,
 }: ScratchCodeEditorProps) {
+  const locked = readOnly || disabled;
   return (
     <textarea
       value={value}
@@ -25,8 +27,8 @@ export function TextareaScratchEditor({
         onFormatRequest();
       }}
       spellCheck={false}
-      readOnly={readOnly}
-      disabled={readOnly}
+      readOnly={locked}
+      disabled={disabled}
       placeholder={placeholder}
       className={`${textareaEditorClass(fillHeight)} ${className ?? ''}`}
     />

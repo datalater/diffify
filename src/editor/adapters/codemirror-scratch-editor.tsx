@@ -79,11 +79,13 @@ export function CodeMirrorScratchEditor({
   onChange,
   language = 'html',
   readOnly,
+  disabled,
   placeholder,
   className,
   fillHeight,
   onFormatRequest,
 }: ScratchCodeEditorProps) {
+  const locked = readOnly || disabled;
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const compartmentsRef = useRef(createCompartments());
@@ -124,7 +126,7 @@ export function CodeMirrorScratchEditor({
           onChangeRef.current(next);
         }),
         compartments.language.of(languageExtension(language)),
-        compartments.readOnly.of(readOnlyExtension(readOnly)),
+        compartments.readOnly.of(readOnlyExtension(locked)),
         compartments.placeholder.of(
           placeholder ? placeholderExt(placeholder) : [],
         ),
@@ -174,15 +176,15 @@ export function CodeMirrorScratchEditor({
     if (!view) return;
     view.dispatch({
       effects: compartmentsRef.current.readOnly.reconfigure(
-        readOnlyExtension(readOnly),
+        readOnlyExtension(locked),
       ),
     });
-  }, [readOnly]);
+  }, [locked]);
 
   return (
     <div
       ref={hostRef}
-      className={`${codeMirrorHostClass(fillHeight)} ${readOnly ? 'pointer-events-none' : ''} ${className ?? ''}`}
+      className={`${codeMirrorHostClass(fillHeight)} ${disabled ? 'pointer-events-none' : ''} ${className ?? ''}`}
     />
   );
 }

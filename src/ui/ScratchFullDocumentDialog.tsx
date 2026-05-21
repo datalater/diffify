@@ -1,5 +1,26 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ScratchCodeEditor } from '../editor/scratch-code-editor';
+import { SCRATCH_ACTION_BTN_CLASS } from './ScratchEditorColumn';
+
+/** 읽기 전용 CM — 스크롤·선택 가능, 기본 light 테마 */
+const FULL_DOC_EDITOR_CLASS =
+  'h-full min-h-0 flex-1 resize-none [&_.cm-editor]:!opacity-100';
+
+const COPY_FEEDBACK_MS = 2000;
+
+function CopyCheckIcon() {
+  return (
+    <svg
+      className="size-3.5 shrink-0 text-emerald-600"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+    </svg>
+  );
+}
 
 export function ScratchFullDocumentDialog({
   open,
@@ -12,6 +33,27 @@ export function ScratchFullDocumentDialog({
   documentHtml: string;
   onClose: () => void;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) setCopied(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(documentHtml);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }, [documentHtml]);
+
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -30,7 +72,7 @@ export function ScratchFullDocumentDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/55 p-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 p-4"
       role="presentation"
       onClick={onClose}
     >
@@ -38,36 +80,46 @@ export function ScratchFullDocumentDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="scratch-full-doc-title"
-        className="flex max-h-[min(90vh,48rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-slate-600 bg-slate-800 shadow-xl"
+        className="flex max-h-[min(90vh,48rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-slate-300 bg-white font-sans shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-600 px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <h3
             id="scratch-full-doc-title"
-            className="font-sans text-sm font-semibold text-slate-100"
+            className="text-sm font-semibold text-slate-800"
           >
             {title}
           </h3>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void navigator.clipboard.writeText(documentHtml)}
-              className="cursor-pointer rounded border border-slate-500 bg-slate-700 px-2.5 py-1 text-[12px] font-semibold text-slate-100 hover:bg-slate-600"
+              onClick={() => void handleCopy()}
+              className={`${SCRATCH_ACTION_BTN_CLASS} inline-flex items-center gap-1`}
+              title={copied ? '클립보드에 복사됨' : '전체 HTML을 클립보드에 복사'}
+              aria-label={copied ? '복사됨' : '복사'}
             >
-              복사
+              {copied ? <CopyCheckIcon /> : null}
+              <span aria-live="polite">{copied ? '복사됨' : '복사'}</span>
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="cursor-pointer rounded border border-slate-500 bg-slate-700 px-2.5 py-1 text-[12px] font-semibold text-slate-100 hover:bg-slate-600"
+              className={SCRATCH_ACTION_BTN_CLASS}
             >
               닫기
             </button>
           </div>
         </div>
-        <pre className="min-h-0 flex-1 overflow-auto p-4 font-mono text-[11px] leading-snug text-slate-200">
-          <code>{documentHtml}</code>
-        </pre>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-50 p-4">
+          <ScratchCodeEditor
+            value={documentHtml}
+            onChange={() => {}}
+            language="html"
+            readOnly
+            fillHeight
+            className={FULL_DOC_EDITOR_CLASS}
+          />
+        </div>
       </div>
     </div>,
     document.body,

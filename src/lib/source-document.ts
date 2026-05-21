@@ -59,3 +59,16 @@ export function createScratchDocument(headInner: string, bodyHtml: string) {
   if (/<html[\s>]/i.test(trimmed)) return trimmed;
   return buildFullDocument(headInner.trim(), wrapBodyHtml(trimmed));
 }
+
+/**
+ * 전체 코드 보기·복사용 — head/body 편집값을 DOM 재직렬화 없이 그대로 조합.
+ * (미리보기용 createScratchDocument는 data-diffify-target 등으로 wrapBodyHtml을 쓴다.)
+ */
+export function createScratchDocumentSourceView(
+  headInner: string,
+  bodyHtml: string,
+): string {
+  const trimmed = bodyHtml.trim();
+  if (/<html[\s>]/i.test(trimmed)) return trimmed;
+  return buildFullDocument(headInner.trim(), trimmed);
+}

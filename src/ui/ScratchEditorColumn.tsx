@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { ScratchCodeEditor } from '../editor/scratch-code-editor';
 import { formatScratchHtmlDocument } from '../lib/format-scratch-html';
-import { createScratchDocument } from '../lib/source-document';
+import { createScratchDocumentSourceView } from '../lib/source-document';
 import { ScratchFullDocumentDialog } from './ScratchFullDocumentDialog';
 
 export const SCRATCH_ACTION_BTN_CLASS =
@@ -54,7 +54,7 @@ export function ScratchEditorColumn({
   const [fullDocOpen, setFullDocOpen] = useState(false);
   const fullDocument = useMemo(
     () =>
-      formatScratchHtmlDocument(createScratchDocument(head, html)),
+      formatScratchHtmlDocument(createScratchDocumentSourceView(head, html)),
     [head, html],
   );
 
@@ -96,6 +96,7 @@ export function ScratchEditorColumn({
             language="html"
             sizeRole="head"
             readOnly={disabled}
+            disabled={disabled}
             fillHeight={false}
             onFormatRequest={onFormatHead}
             placeholder={'<meta charset="UTF-8">\n<script src="..."></script>'}
@@ -121,6 +122,7 @@ export function ScratchEditorColumn({
             language="html"
             sizeRole="body"
             readOnly={disabled}
+            disabled={disabled}
             fillHeight={fillHeight}
             onFormatRequest={onFormatHtml}
             placeholder="<div>...</div>"
