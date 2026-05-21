@@ -52,6 +52,7 @@ export function ScratchEditorColumn({
   headHelp,
   className,
   fillHeight = false,
+  disabled = false,
 }: {
   title: string;
   head: string;
@@ -65,6 +66,7 @@ export function ScratchEditorColumn({
   headHelp?: string;
   className?: string;
   fillHeight?: boolean;
+  disabled?: boolean;
 }) {
   const [fullDocOpen, setFullDocOpen] = useState(false);
   const fullDocument = useMemo(
@@ -86,11 +88,14 @@ export function ScratchEditorColumn({
               onClick={() => setFullDocOpen(true)}
               className={SCRATCH_ACTION_BTN_CLASS}
               title="iframe srcDoc에 들어갈 전체 HTML 문서"
+              disabled={disabled}
             >
               전체 코드
             </button>
-            {onFormatHead ? <ScratchFormatButton onClick={onFormatHead} /> : null}
-            {headActions}
+            {onFormatHead && !disabled ? (
+              <ScratchFormatButton onClick={onFormatHead} />
+            ) : null}
+            {disabled ? null : headActions}
           </div>
         </div>
         <label className="flex min-h-0 flex-col gap-1 text-xs text-slate-700">
@@ -107,7 +112,8 @@ export function ScratchEditorColumn({
             onChange={(event) => onHeadChange(event.target.value)}
             onKeyDown={(event) => handleFormatShortcut(event, onFormatHead)}
             spellCheck={false}
-            className="min-h-28 w-full resize-y rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] leading-snug text-slate-900 focus:outline-2 focus:outline-sky-500"
+            disabled={disabled}
+            className="min-h-28 w-full resize-y rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] leading-snug text-slate-900 focus:outline-2 focus:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
             placeholder={'<meta charset="UTF-8">\n<script src="..."></script>'}
           />
         </label>
@@ -119,10 +125,10 @@ export function ScratchEditorColumn({
               </code>
             </span>
             <span className="flex shrink-0 flex-wrap items-center gap-2">
-              {onFormatHtml ? (
+              {onFormatHtml && !disabled ? (
                 <ScratchFormatButton onClick={onFormatHtml} />
               ) : null}
-              {htmlActions}
+              {disabled ? null : htmlActions}
             </span>
           </span>
           <textarea
@@ -130,7 +136,8 @@ export function ScratchEditorColumn({
             onChange={(event) => onHtmlChange(event.target.value)}
             onKeyDown={(event) => handleFormatShortcut(event, onFormatHtml)}
             spellCheck={false}
-            className={`w-full resize-y rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] leading-snug text-slate-900 focus:outline-2 focus:outline-sky-500 ${fillHeight ? 'min-h-40 flex-1' : 'min-h-40'}`}
+            disabled={disabled}
+            className={`w-full resize-y rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] leading-snug text-slate-900 focus:outline-2 focus:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-60 ${fillHeight ? 'min-h-40 flex-1' : 'min-h-40'}`}
             placeholder="<div>...</div>"
           />
         </label>

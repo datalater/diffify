@@ -14,12 +14,18 @@ import {
   writeScratchShowingSource,
 } from './scratch-ui-state';
 import {
+  computeScratchLoadPercent,
+  type ScratchLoadProgressCallback,
+} from './scratch-load-progress';
+import {
   contentFromPayload,
   defaultScratchSnapshot,
   type ScratchEditors,
   type ScratchPersistPayload,
   type ScratchPersistSnapshot,
 } from './scratch-persist';
+
+export type { ScratchLoadProgressCallback } from './scratch-load-progress';
 
 export type ScratchVersionEntry = {
   entryId: string;
@@ -123,9 +129,33 @@ async function getBlobByHash(
   }
 }
 
-async function migrateLegacyIdbBlobs(projectId: string): Promise<void> {
+function reportMigrateProgress(
+  onProgress: ScratchLoadProgressCallback | undefined,
+  done: number,
+  total: number,
+): void {
+  if (!onProgress) return;
+  onProgress({
+    phase: 'migrate-blobs',
+    message:
+      total > 0
+        ? '저장소 데이터 이전 중…'
+        : '저장소 확인 중…',
+    percent: computeScratchLoadPercent('migrate-blobs', { done, total }),
+    done,
+    total,
+    indeterminate: total === 0,
+  });
+}
+
+async function migrateLegacyIdbBlobs(
+  projectId: string,
+  onProgress?: ScratchLoadProgressCallback,
+): Promise<void> {
   if (idbLegacyMigrated || typeof indexedDB === 'undefined') return;
   idbLegacyMigrated = true;
+
+  reportMigrateProgress(onProgress, 0, 0);
 
   try {
     const legacyDb = await new Promise<IDBDatabase | null>((resolve) => {
@@ -161,8 +191,13 @@ async function migrateLegacyIdbBlobs(projectId: string): Promise<void> {
     });
     legacyDb.close();
 
-    for (const row of rows) {
+    const total = rows.length;
+    reportMigrateProgress(onProgress, 0, total);
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i]!;
       await putBlob(projectId, row.hash, row.content);
+      reportMigrateProgress(onProgress, i + 1, total);
     }
   } catch {
     /* ignore */
@@ -342,14 +377,26 @@ async function migrateLegacyScratchStorage(
   }
 }
 
-export async function ensureScratchStorageReady(): Promise<void> {
+export type EnsureScratchStorageReadyOptions = {
+  onProgress?: ScratchLoadProgressCallback;
+};
+
+export async function ensureScratchStorageReady(
+  options?: EnsureScratchStorageReadyOptions,
+): Promise<void> {
+  const onProgress = options?.onProgress;
   if (migratePromise) return migratePromise;
 
   migratePromise = (async () => {
     const registry = await ensureScratchProjectsReady();
     const projectId = registry.activeProjectId;
     // v2 open 전에 v1 blob을 읽어야 upgrade 시 데이터가 지워지지 않는다.
-    await migrateLegacyIdbBlobs(projectId);
+    await migrateLegacyIdbBlobs(projectId, onProgress);
+    onProgress?.({
+      phase: 'storage',
+      message: '저장소 준비 중…',
+      percent: computeScratchLoadPercent('storage'),
+    });
     await openDatabase();
     await migrateLegacyScratchStorage(projectId);
   })();
@@ -382,11 +429,22 @@ export type ScratchWorkspaceLoad = {
   hasDraft: boolean;
 };
 
+export type LoadScratchWorkspaceOptions = {
+  onProgress?: ScratchLoadProgressCallback;
+};
+
 export async function loadScratchWorkspace(
   urlOverride: ScratchPersistSnapshot | null,
   projectId = getActiveProjectId(),
+  options?: LoadScratchWorkspaceOptions,
 ): Promise<ScratchWorkspaceLoad> {
-  await ensureScratchStorageReady();
+  await ensureScratchStorageReady({ onProgress: options?.onProgress });
+
+  options?.onProgress?.({
+    phase: 'workspace',
+    message: 'draft·버전·URL state 불러오는 중…',
+    percent: computeScratchLoadPercent('workspace'),
+  });
 
   const defaultShowingSource = defaultScratchSnapshot().showingSource;
 

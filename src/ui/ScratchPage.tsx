@@ -21,6 +21,12 @@ import {
   type ScratchProjectRegistry,
 } from "../lib/scratch-project-registry";
 import {
+  computeScratchLoadPercent,
+  initialScratchLoadProgress,
+  type ScratchLoadProgress,
+  type ScratchLoadProgressCallback,
+} from "../lib/scratch-load-progress";
+import {
   checkoutScratchVersionEntry,
   commitScratchVersion,
   discardScratchDraftToCurrent,
@@ -78,10 +84,12 @@ import {
   type ScratchPaneId,
   type ScratchPaneVisibility,
 } from "./scratch-pane-visibility";
+import { ScratchLoadOverlay } from "./ScratchLoadOverlay";
 import { ScratchTopBar } from "./ScratchTopBar";
 
 const LIVE_PREVIEW_DEBOUNCE_MS = 200;
 const DRAFT_DEBOUNCE_MS = 400;
+const LOAD_OVERLAY_DELAY_MS = 200;
 
 const BASELINE_PREVIEW = defaultScratchPreviewDimensions();
 
@@ -157,9 +165,11 @@ export function ScratchPage() {
     useState<PreviewWidthMode>(DEFAULT_PREVIEW_WIDTH_MODE);
   const [previewHeightMode, setPreviewHeightMode] =
     useState<PreviewHeightMode>(DEFAULT_PREVIEW_HEIGHT_MODE);
-  const [status, setStatus] = useState(
-    "저장된 내용을 불러오는 중… (draft·버전·URL `?state=`)",
+  const [status, setStatus] = useState("");
+  const [loadProgress, setLoadProgress] = useState<ScratchLoadProgress | null>(
+    () => initialScratchLoadProgress(),
   );
+  const [showLoadOverlay, setShowLoadOverlay] = useState(false);
   const [previewMeasured, setPreviewMeasured] =
     useState<PreviewLiveMeasured | null>(null);
   const [paneVisibility, setPaneVisibility] = useState<ScratchPaneVisibility>(
@@ -198,16 +208,33 @@ export function ScratchPage() {
 
   const documentContent = editors;
 
+  const reportLoadProgress = useCallback<ScratchLoadProgressCallback>(
+    (progress) => {
+      setLoadProgress(progress);
+    },
+    [],
+  );
+
   const applyWorkspaceLoad = useCallback(
     async (
       projectId: string,
       workspace: Awaited<ReturnType<typeof loadScratchWorkspace>>,
-      options: { urlSnap: boolean; projectLabel?: string },
+      options: {
+        urlSnap: boolean;
+        projectLabel?: string;
+        onProgress?: ScratchLoadProgressCallback;
+      },
     ) => {
       setEditors(workspace.editors);
       setPreviewDocs(buildPreviewDocs(workspace.editors));
       setShowingSource(workspace.showingSource);
       setVersionMeta(workspace.meta);
+
+      options.onProgress?.({
+        phase: "dirty",
+        message: "변경 여부 확인 중…",
+        percent: computeScratchLoadPercent("dirty"),
+      });
 
       const dirty = await isScratchWorkspaceDirty(
         workspace.editors,
@@ -237,14 +264,82 @@ export function ScratchPage() {
       projectId: string,
       urlSnap: ScratchPersistSnapshot | null = null,
       projectLabel?: string,
+      onProgress?: ScratchLoadProgressCallback,
     ) => {
-      const workspace = await loadScratchWorkspace(urlSnap, projectId);
+      const workspace = await loadScratchWorkspace(urlSnap, projectId, {
+        onProgress,
+      });
       await applyWorkspaceLoad(projectId, workspace, {
         urlSnap: urlSnap !== null,
         projectLabel,
+        onProgress,
       });
     },
     [applyWorkspaceLoad],
+  );
+
+  const bootstrapScratchWorkspace = useCallback(async () => {
+    reportLoadProgress({
+      phase: "projects",
+      message: "프로젝트 준비 중…",
+      percent: computeScratchLoadPercent("projects"),
+    });
+    const registry = await ensureScratchProjectsReady();
+    setProjectRegistry(registry);
+    setActiveProjectIdState(registry.activeProjectId);
+    const projectId = registry.activeProjectId;
+
+    const urlEncoded = new URLSearchParams(window.location.search).get(
+      "state",
+    );
+    let urlSnap: ScratchPersistSnapshot | null = null;
+    if (urlEncoded) {
+      reportLoadProgress({
+        phase: "url-state",
+        message: "URL `?state=` 디코딩 중…",
+        percent: computeScratchLoadPercent("url-state"),
+      });
+      urlSnap = await decodeScratchState(urlEncoded);
+    }
+
+    const project = registry.projects.find((p) => p.id === projectId);
+    await loadProjectWorkspace(
+      projectId,
+      urlSnap,
+      project?.name,
+      reportLoadProgress,
+    );
+
+    const { previewWidth: w, previewHeight: h } =
+      defaultScratchPreviewDimensions();
+    setPreviewWidth(clampWidth(w));
+    setPreviewHeight(clampHeight(h));
+    setPreviewWidthMode(DEFAULT_PREVIEW_WIDTH_MODE);
+    setPreviewHeightMode(DEFAULT_PREVIEW_HEIGHT_MODE);
+  }, [loadProjectWorkspace, reportLoadProgress]);
+
+  const reloadProjectWorkspace = useCallback(
+    async (projectId: string, projectLabel?: string) => {
+      setShowLoadOverlay(false);
+      setLoadProgress(initialScratchLoadProgress());
+      try {
+        await loadProjectWorkspace(
+          projectId,
+          null,
+          projectLabel,
+          reportLoadProgress,
+        );
+        setLoadProgress(null);
+        setHydrated(true);
+      } catch (error) {
+        const detail =
+          error instanceof Error ? error.message : "알 수 없는 오류";
+        setStatus(`워크스페이스를 불러오지 못했다. (${detail})`);
+        setLoadProgress(null);
+        setHydrated(true);
+      }
+    },
+    [loadProjectWorkspace, reportLoadProgress],
   );
 
   const flushDraftForActiveProject = useCallback(() => {
@@ -254,43 +349,39 @@ export function ScratchPage() {
   }, [hydrated, activeProjectId, documentContent, showingSource]);
 
   useEffect(() => {
+    if (hydrated) return undefined;
+    const timer = window.setTimeout(
+      () => setShowLoadOverlay(true),
+      LOAD_OVERLAY_DELAY_MS,
+    );
+    return () => {
+      window.clearTimeout(timer);
+      setShowLoadOverlay(false);
+    };
+  }, [hydrated]);
+
+  useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const registry = await ensureScratchProjectsReady();
-      if (cancelled) return;
+      try {
+        await bootstrapScratchWorkspace();
+        if (cancelled) return;
 
-      setProjectRegistry(registry);
-      setActiveProjectIdState(registry.activeProjectId);
-
-      const urlEncoded = new URLSearchParams(window.location.search).get(
-        "state",
-      );
-      const urlSnap = urlEncoded
-        ? await decodeScratchState(urlEncoded)
-        : null;
-
-      const project = registry.projects.find(
-        (p) => p.id === registry.activeProjectId,
-      );
-      await loadProjectWorkspace(
-        registry.activeProjectId,
-        urlSnap,
-        project?.name,
-      );
-      if (cancelled) return;
-
-      const { previewWidth: w, previewHeight: h } =
-        defaultScratchPreviewDimensions();
-      setPreviewWidth(clampWidth(w));
-      setPreviewHeight(clampHeight(h));
-      setPreviewWidthMode(DEFAULT_PREVIEW_WIDTH_MODE);
-      setPreviewHeightMode(DEFAULT_PREVIEW_HEIGHT_MODE);
-      setHydrated(true);
+        setLoadProgress(null);
+        setHydrated(true);
+      } catch (error) {
+        if (cancelled) return;
+        const detail =
+          error instanceof Error ? error.message : "알 수 없는 오류";
+        setStatus(`워크스페이스를 불러오지 못했다. (${detail})`);
+        setLoadProgress(null);
+        setHydrated(true);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [loadProjectWorkspace]);
+  }, [bootstrapScratchWorkspace, reportLoadProgress]);
 
   useEffect(() => {
     if (!isDevCompare) return;
@@ -402,15 +493,14 @@ export function ScratchPage() {
       setHydrated(false);
 
       const project = next.projects.find((p) => p.id === projectId);
-      await loadProjectWorkspace(projectId, null, project?.name);
-      setHydrated(true);
+      await reloadProjectWorkspace(projectId, project?.name);
       setStatus(`프로젝트를 「${project?.name ?? ""}」(으)로 전환했다.`);
     },
     [
       projectRegistry,
       activeProjectId,
       flushDraftForActiveProject,
-      loadProjectWorkspace,
+      reloadProjectWorkspace,
     ],
   );
 
@@ -427,10 +517,9 @@ export function ScratchPage() {
     setHydrated(false);
 
     const project = next.projects.find((p) => p.id === next.activeProjectId);
-    await loadProjectWorkspace(next.activeProjectId, null, project?.name);
-    setHydrated(true);
+    await reloadProjectWorkspace(next.activeProjectId, project?.name);
     setStatus(`새 프로젝트 「${project?.name ?? ""}」를 만들었다.`);
-  }, [projectRegistry, flushDraftForActiveProject, loadProjectWorkspace]);
+  }, [projectRegistry, flushDraftForActiveProject, reloadProjectWorkspace]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -722,17 +811,21 @@ export function ScratchPage() {
         onTogglePane={togglePane}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {!hydrated && showLoadOverlay && loadProgress ? (
+          <ScratchLoadOverlay progress={loadProgress} />
+        ) : null}
         {visiblePaneCount === 0 ? <ScratchPaneEmptyState /> : null}
 
         {visibleEditorPaneCount > 0 ? (
           <main
-            className={`mobile-down:flex-col flex min-h-0 flex-row gap-4 p-4 ${editorsFillHeight || previewOnly ? "flex-1" : "shrink-0"}`}
+            className={`mobile-down:flex-col flex min-h-0 flex-row gap-4 p-4 ${editorsFillHeight || previewOnly ? "flex-1" : "shrink-0"} ${!hydrated ? "pointer-events-none" : ""}`}
           >
             {paneVisibility.source ? (
               <ScratchEditorColumn
                 className={editorColumnClassName}
                 fillHeight={editorsFillHeight}
+                disabled={!hydrated}
                 title="Source"
                 head={editors.sourceHead}
                 html={editors.sourceHtml}
@@ -760,6 +853,7 @@ export function ScratchPage() {
               <ScratchEditorColumn
                 className={editorColumnClassName}
                 fillHeight={editorsFillHeight}
+                disabled={!hydrated}
                 title="Result"
                 head={editors.resultHead}
                 html={editors.resultHtml}
@@ -778,7 +872,7 @@ export function ScratchPage() {
 
         {paneVisibility.preview ? (
           <section
-            className={`flex min-h-0 flex-col ${visibleEditorPaneCount === 0 ? "p-4 pb-8" : "px-4 pb-8"} ${previewOnly || visibleEditorPaneCount === 0 ? "min-h-0 flex-1" : ""}`}
+            className={`flex min-h-0 flex-col ${visibleEditorPaneCount === 0 ? "p-4 pb-8" : "px-4 pb-8"} ${previewOnly || visibleEditorPaneCount === 0 ? "min-h-0 flex-1" : ""} ${!hydrated ? "pointer-events-none" : ""}`}
           >
             <div
               className={`flex min-h-0 flex-col overflow-auto border border-slate-300 bg-slate-100 p-3 shadow-sm ${previewOnly || visibleEditorPaneCount === 0 ? "min-h-0 flex-1" : ""}`}
