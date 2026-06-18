@@ -16,6 +16,18 @@ export type PreviewLiveMeasured = {
   contentHeight: number;
 };
 
+/** live preview — iframe의 세로 스크롤 위치 (툴바 표시·sync용) */
+export type PreviewScrollInfo = {
+  y: number; // contentWindow.scrollY (round)
+  max: number; // scrollHeight - clientHeight (round, 0 이상)
+};
+
+/** source·result 스크롤 위치를 함께 — 툴바에 둘 다 표시한다 */
+export type PreviewScrollState = {
+  source: PreviewScrollInfo | null;
+  result: PreviewScrollInfo | null;
+};
+
 function liveMeasureTarget(doc: Document): HTMLElement {
   return doc.querySelector<HTMLElement>(LIVE_TARGET_SELECTOR) ?? doc.body;
 }

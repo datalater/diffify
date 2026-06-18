@@ -10,6 +10,8 @@ import {
   measureIframeContentSize,
   type IframeContentSize,
   type PreviewLiveMeasured,
+  type PreviewScrollInfo,
+  type PreviewScrollState,
 } from '../lib/measure-iframe-content';
 import { ArtboardMatEmpty, ArtboardMatFrame } from './ArtboardMatFrame';
 
@@ -33,6 +35,14 @@ function measureWithRetries(
   };
 }
 
+function readScrollInfo(win: Window): PreviewScrollInfo {
+  const docEl = win.document.documentElement;
+  return {
+    y: Math.round(win.scrollY),
+    max: Math.round(Math.max(0, docEl.scrollHeight - docEl.clientHeight)),
+  };
+}
+
 export function DiffifyLiveOverlay({
   sourceDoc,
   resultDoc,
@@ -40,6 +50,8 @@ export function DiffifyLiveOverlay({
   fallbackHeight,
   showingSource,
   onLiveBoxMeasured,
+  onScrollChange,
+  syncScroll = false,
 }: {
   sourceDoc: string;
   resultDoc: string;
@@ -47,12 +59,19 @@ export function DiffifyLiveOverlay({
   fallbackHeight: number;
   showingSource: boolean;
   onLiveBoxMeasured?: (size: PreviewLiveMeasured) => void;
+  onScrollChange?: (state: PreviewScrollState) => void;
+  syncScroll?: boolean;
 }) {
   const [sizeSource, setSizeSource] = useState<IframeContentSize | null>(null);
   const [sizeResult, setSizeResult] = useState<IframeContentSize | null>(null);
   const sourceFrameRef = useRef<HTMLIFrameElement | null>(null);
   const resultFrameRef = useRef<HTMLIFrameElement | null>(null);
   const [trackedDocs, setTrackedDocs] = useState({ sourceDoc, resultDoc });
+
+  /** sync 토글 시 전환된 iframe에 적용할 공유 세로 스크롤 위치 */
+  const sharedScrollRef = useRef(0);
+  const sourceScrollCleanupRef = useRef<(() => void) | null>(null);
+  const resultScrollCleanupRef = useRef<(() => void) | null>(null);
 
   if (
     sourceDoc !== trackedDocs.sourceDoc ||
@@ -67,6 +86,80 @@ export function DiffifyLiveOverlay({
     sourceFrameRef.current = null;
     resultFrameRef.current = null;
   }, [sourceDoc, resultDoc]);
+
+  const canShowResult = Boolean(resultDoc.trim());
+  const canShowSource = Boolean(sourceDoc.trim());
+  const showSourceLayer = canShowSource && (showingSource || !canShowResult);
+  const showResultLayer = canShowResult && (!showingSource || !canShowSource);
+
+  /** scroll 핸들러는 onLoad 시점 클로저라 stale — 최신값을 ref로 읽는다. */
+  const liveRef = useRef({
+    showSourceLayer,
+    showResultLayer,
+    syncScroll,
+    onScrollChange,
+  });
+  useEffect(() => {
+    liveRef.current = {
+      showSourceLayer,
+      showResultLayer,
+      syncScroll,
+      onScrollChange,
+    };
+  });
+
+  /** source·result 양쪽의 현재 스크롤을 읽어 함께 보고한다(둘 다 툴바에 표시). */
+  const emitScrollState = useCallback(() => {
+    const sourceWin = sourceFrameRef.current?.contentWindow ?? null;
+    const resultWin = resultFrameRef.current?.contentWindow ?? null;
+    liveRef.current.onScrollChange?.({
+      source: sourceWin ? readScrollInfo(sourceWin) : null,
+      result: resultWin ? readScrollInfo(resultWin) : null,
+    });
+  }, []);
+
+  const attachScroll = useCallback(
+    (which: 'source' | 'result', frame: HTMLIFrameElement) => {
+      const win = frame.contentWindow;
+      if (!win) return;
+      const handler = () => {
+        const live = liveRef.current;
+        const visible =
+          which === 'source' ? live.showSourceLayer : live.showResultLayer;
+        // sync 기준은 "보고 있는 쪽"의 스크롤 위치
+        if (visible) {
+          sharedScrollRef.current = Math.round(win.scrollY);
+          // sync ON이면 숨은 쪽도 실시간으로 같은 위치로 — 표시값이 함께 갱신된다.
+          if (live.syncScroll) {
+            const otherFrame =
+              which === 'source'
+                ? resultFrameRef.current
+                : sourceFrameRef.current;
+            otherFrame?.contentWindow?.scrollTo(0, sharedScrollRef.current);
+          }
+        }
+        emitScrollState();
+      };
+      win.addEventListener('scroll', handler, { passive: true });
+      const cleanup = () => win.removeEventListener('scroll', handler);
+      if (which === 'source') {
+        sourceScrollCleanupRef.current?.();
+        sourceScrollCleanupRef.current = cleanup;
+      } else {
+        resultScrollCleanupRef.current?.();
+        resultScrollCleanupRef.current = cleanup;
+      }
+    },
+    [emitScrollState],
+  );
+
+  useEffect(
+    () => () => {
+      sourceScrollCleanupRef.current?.();
+      resultScrollCleanupRef.current?.();
+    },
+    [],
+  );
 
   const scheduleMeasure = useCallback(
     (which: 'source' | 'result', frame: HTMLIFrameElement) => {
@@ -99,21 +192,38 @@ export function DiffifyLiveOverlay({
   const onSourceLoad = useCallback(
     (event: SyntheticEvent<HTMLIFrameElement>) => {
       scheduleMeasure('source', event.currentTarget);
+      attachScroll('source', event.currentTarget);
+      emitScrollState();
     },
-    [scheduleMeasure],
+    [scheduleMeasure, attachScroll, emitScrollState],
   );
 
   const onResultLoad = useCallback(
     (event: SyntheticEvent<HTMLIFrameElement>) => {
       scheduleMeasure('result', event.currentTarget);
+      attachScroll('result', event.currentTarget);
+      emitScrollState();
     },
-    [scheduleMeasure],
+    [scheduleMeasure, attachScroll, emitScrollState],
   );
 
-  const canShowResult = Boolean(resultDoc.trim());
-  const canShowSource = Boolean(sourceDoc.trim());
-  const showSourceLayer = canShowSource && (showingSource || !canShowResult);
-  const showResultLayer = canShowResult && (!showingSource || !canShowSource);
+  /** 전환 시: sync면 보이는 iframe을 공유 위치로 맞추고, 양쪽 값을 툴바에 반영한다. */
+  useEffect(() => {
+    if (syncScroll) {
+      const frame = showSourceLayer
+        ? sourceFrameRef.current
+        : showResultLayer
+          ? resultFrameRef.current
+          : null;
+      frame?.contentWindow?.scrollTo(0, sharedScrollRef.current);
+    }
+    emitScrollState();
+  }, [showSourceLayer, showResultLayer, syncScroll, emitScrollState]);
+
+  /** measure로 콘텐츠 크기가 확정되면 max(스크롤 가능 범위)도 갱신해 반영한다. */
+  useEffect(() => {
+    emitScrollState();
+  }, [sizeSource, sizeResult, emitScrollState]);
 
   /** 보이는 레이어만 box·w-fit/h-fit에 반영 (숨긴 쪽 높이가 섞이지 않음) */
   const visibleLayerSize =

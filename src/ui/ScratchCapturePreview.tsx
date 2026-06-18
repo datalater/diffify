@@ -9,7 +9,10 @@ import {
   ARTBOARD_MAT_VERTICAL_PAD_PX,
   ArtboardMatShell,
 } from './ArtboardMatFrame';
-import type { PreviewLiveMeasured } from '../lib/measure-iframe-content';
+import type {
+  PreviewLiveMeasured,
+  PreviewScrollState,
+} from '../lib/measure-iframe-content';
 import { DiffifyLiveOverlay } from './DiffifyLiveOverlay';
 import { useElementOuterHeight } from './use-element-outer-height';
 
@@ -208,6 +211,8 @@ type ScratchComparePreviewProps = {
   width: number;
   fallbackHeight: number;
   onLiveBoxMeasured?: (size: PreviewLiveMeasured) => void;
+  onScrollChange?: (state: PreviewScrollState) => void;
+  syncScroll?: boolean;
 };
 
 function ScratchComparePreviewSingle({
@@ -217,6 +222,8 @@ function ScratchComparePreviewSingle({
   fallbackHeight,
   showingSource,
   onLiveBoxMeasured,
+  onScrollChange,
+  syncScroll,
 }: Pick<
   ScratchComparePreviewProps,
   | 'sourceDoc'
@@ -225,6 +232,8 @@ function ScratchComparePreviewSingle({
   | 'fallbackHeight'
   | 'showingSource'
   | 'onLiveBoxMeasured'
+  | 'onScrollChange'
+  | 'syncScroll'
 >) {
   return (
     <DiffifyLiveOverlay
@@ -234,6 +243,8 @@ function ScratchComparePreviewSingle({
       fallbackHeight={fallbackHeight}
       showingSource={showingSource}
       onLiveBoxMeasured={onLiveBoxMeasured}
+      onScrollChange={onScrollChange}
+      syncScroll={syncScroll}
     />
   );
 }
@@ -248,6 +259,8 @@ function ScratchComparePreviewDual({
   width,
   fallbackHeight,
   onLiveBoxMeasured,
+  onScrollChange,
+  syncScroll,
 }: ScratchComparePreviewProps) {
   const codeFallbackOuter =
     ARTBOARD_MAT_VERTICAL_PAD_PX + Math.max(fallbackHeight, 80);
@@ -265,6 +278,7 @@ function ScratchComparePreviewDual({
   );
 
   const reportLiveMeasure = substrate === 'code' ? onLiveBoxMeasured : undefined;
+  const reportScrollChange = substrate === 'code' ? onScrollChange : undefined;
 
   return (
     <div
@@ -282,6 +296,8 @@ function ScratchComparePreviewDual({
           fallbackHeight={fallbackHeight}
           showingSource={showingSource}
           onLiveBoxMeasured={reportLiveMeasure}
+          onScrollChange={reportScrollChange}
+          syncScroll={syncScroll}
         />
       </PreviewStackLayer>
 

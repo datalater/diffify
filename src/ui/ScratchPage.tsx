@@ -56,7 +56,10 @@ import type {
   ScratchPreviewSubstrate,
 } from "../lib/scratch-compare-types";
 import type { ScratchHtmlLayer } from "../lib/scratch-html-io";
-import type { PreviewLiveMeasured } from "../lib/measure-iframe-content";
+import type {
+  PreviewLiveMeasured,
+  PreviewScrollState,
+} from "../lib/measure-iframe-content";
 import {
   DEFAULT_PREVIEW_HEIGHT_MODE,
   DEFAULT_PREVIEW_WIDTH_MODE,
@@ -194,6 +197,9 @@ export function ScratchPage() {
   const [showLoadOverlay, setShowLoadOverlay] = useState(false);
   const [previewMeasured, setPreviewMeasured] =
     useState<PreviewLiveMeasured | null>(null);
+  const [previewScroll, setPreviewScroll] =
+    useState<PreviewScrollState | null>(null);
+  const [syncScroll, setSyncScroll] = useState(false);
   const [paneVisibility, setPaneVisibility] = useState<ScratchPaneVisibility>(
     () => ({ ...DEFAULT_SCRATCH_PANE_VISIBILITY }),
   );
@@ -672,6 +678,12 @@ export function ScratchPage() {
       if (isScratchEditorTypingTarget(event.target)) {
         return;
       }
+      // S: sync 토글 (Cmd/Ctrl+S 저장과 겹치지 않게 modifier 제외)
+      if (event.code === "KeyS" && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        setSyncScroll((prev) => !prev);
+        return;
+      }
       if (event.code === "Space" || event.code === "KeyD") {
         const layerToggleEnabled =
           !isDevCompare ||
@@ -996,7 +1008,7 @@ export function ScratchPage() {
                     }
                   >
                     {previewSubstrate === "code" || !isDevCompare
-                      ? "Space/D · Source/Result"
+                      ? "Space/D · Source/Result · S · sync"
                       : "Space/D · 레이어"}
                   </span>
                 </div>
@@ -1038,6 +1050,14 @@ export function ScratchPage() {
                   isPreviewSizeAtBaseline={isPreviewSizeAtBaseline}
                   onResetPreviewSize={resetPreviewSize}
                   previewMeasured={previewMeasured}
+                  previewScroll={
+                    (isDevCompare ? previewSubstrate : "code") === "code"
+                      ? previewScroll
+                      : null
+                  }
+                  showingSource={showingSource}
+                  syncScroll={syncScroll}
+                  onToggleSyncScroll={() => setSyncScroll((v) => !v)}
                 />
                 <ScratchComparePreview
                   substrate={isDevCompare ? previewSubstrate : "code"}
@@ -1050,6 +1070,8 @@ export function ScratchPage() {
                   width={previewWidth}
                   fallbackHeight={previewHeight}
                   onLiveBoxMeasured={handleLiveBoxMeasured}
+                  onScrollChange={setPreviewScroll}
+                  syncScroll={syncScroll}
                 />
               </div>
               {isDevCompare ? (
