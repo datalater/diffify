@@ -98,8 +98,10 @@ export function CodeMirrorScratchEditor({
   const onFormatRef = useRef(onFormatRequest);
   const lastExternalValueRef = useRef(value);
 
-  onChangeRef.current = onChange;
-  onFormatRef.current = onFormatRequest;
+  useEffect(() => {
+    onChangeRef.current = onChange;
+    onFormatRef.current = onFormatRequest;
+  });
 
   useEffect(() => {
     const host = hostRef.current;
@@ -152,6 +154,11 @@ export function CodeMirrorScratchEditor({
       view.destroy();
       viewRef.current = null;
     };
+    // EditorView는 마운트 시 1회만 생성/파괴한다. value·locked·콜백 등 변하는
+    // 값은 별도 effect와 latest-ref로 반영하므로 여기서 의존성을 추가하면
+    // 에디터가 통째로 재생성되어 포커스·커서·undo 히스토리가 날아간다.
+    // language·placeholder는 런타임에 바뀌지 않는다는 전제로 생략한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
