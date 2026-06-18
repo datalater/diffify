@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { ScratchCodeEditor } from '../editor/scratch-code-editor';
-import { SCRATCH_ACTION_BTN_CLASS } from './ScratchEditorColumn';
+import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { ScratchCodeEditor } from "../editor/scratch-code-editor";
+import { SCRATCH_ACTION_BTN_CLASS } from "./ScratchEditorColumn";
 
 /** 읽기 전용 CM — 스크롤·선택 가능, 기본 light 테마 */
 const FULL_DOC_EDITOR_CLASS =
-  'h-full min-h-0 flex-1 resize-none [&_.cm-editor]:!opacity-100';
+  "h-full min-h-0 flex-1 resize-none [&_.cm-editor]:!opacity-100";
 
 const COPY_FEEDBACK_MS = 2000;
 
@@ -27,17 +27,40 @@ export function ScratchFullDocumentDialog({
   title,
   documentHtml,
   onClose,
+  onApply,
 }: {
   open: boolean;
   title: string;
   documentHtml: string;
   onClose: () => void;
+  /** 있으면 헤더에 "적용" 버튼을 노출한다 (예시 모달 전용). */
+  onApply?: () => void;
+}) {
+  // 열릴 때만 본문을 마운트한다. 닫으면 언마운트되어 "복사됨" 등 내부 상태가
+  // 자연히 초기화되므로, 별도의 리셋 effect가 필요 없다.
+  if (!open) return null;
+  return (
+    <FullDocumentDialogBody
+      title={title}
+      documentHtml={documentHtml}
+      onClose={onClose}
+      onApply={onApply}
+    />
+  );
+}
+
+function FullDocumentDialogBody({
+  title,
+  documentHtml,
+  onClose,
+  onApply,
+}: {
+  title: string;
+  documentHtml: string;
+  onClose: () => void;
+  onApply?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!open) setCopied(false);
-  }, [open]);
 
   useEffect(() => {
     if (!copied) return;
@@ -55,20 +78,17 @@ export function ScratchFullDocumentDialog({
   }, [documentHtml]);
 
   useEffect(() => {
-    if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === "Escape") onClose();
     };
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
     const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
-
-  if (!open) return null;
+  }, [onClose]);
 
   return createPortal(
     <div
@@ -91,15 +111,27 @@ export function ScratchFullDocumentDialog({
             {title}
           </h3>
           <div className="flex items-center gap-2">
+            {onApply ? (
+              <button
+                type="button"
+                onClick={onApply}
+                className={`${SCRATCH_ACTION_BTN_CLASS} border-sky-300! bg-sky-50! text-sky-700! hover:bg-sky-100!`}
+                title="이 예시를 에디터에 적용"
+              >
+                덮어쓰기
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void handleCopy()}
               className={`${SCRATCH_ACTION_BTN_CLASS} inline-flex items-center gap-1`}
-              title={copied ? '클립보드에 복사됨' : '전체 HTML을 클립보드에 복사'}
-              aria-label={copied ? '복사됨' : '복사'}
+              title={
+                copied ? "클립보드에 복사됨" : "전체 HTML을 클립보드에 복사"
+              }
+              aria-label={copied ? "복사됨" : "복사"}
             >
               {copied ? <CopyCheckIcon /> : null}
-              <span aria-live="polite">{copied ? '복사됨' : '복사'}</span>
+              <span aria-live="polite">{copied ? "복사됨" : "복사"}</span>
             </button>
             <button
               type="button"

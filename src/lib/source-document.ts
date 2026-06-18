@@ -1,15 +1,3 @@
-const TAILWIND_BROWSER_SRC = 'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4';
-const FONT_SRC =
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
-
-/** Figma Source scratch — `<head>` 안에 넣을 기본 내용 */
-export const DEFAULT_FIGMA_SOURCE_HEAD = [
-  '<meta charset="UTF-8">',
-  '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
-  `<script src="${TAILWIND_BROWSER_SRC}"></script>`,
-  `<link href="${FONT_SRC}" rel="stylesheet">`,
-].join('\n');
-
 /**
  * fragment 최상단 단일 루트에 `data-diffify-target`을 붙인다.
  * 여러 루트·텍스트만 있으면 캡처용 래퍼 div로 감싼다.

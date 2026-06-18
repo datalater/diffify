@@ -34,6 +34,36 @@ const SHARE_PANEL_CLASS = "min-w-[11rem] px-1 py-1 font-sans";
 
 const URL_COPY_DISABLED_TITLE = `인코딩된 URL의 ?state= 값이 최대 ${MAX_URL_STATE_CHARS.toLocaleString()}자를 넘어 공유할 수 없습니다. (브라우저 전체 URL 길이 한도가 아닌, gzip·base64로 인코딩한 state 파라미터 값 기준)`;
 
+const COPY_FEEDBACK_MS = 2000;
+
+/** 복사 성공 피드백 체크 (✓) */
+function CopyCheckIcon() {
+  return (
+    <svg
+      className="size-3.5 shrink-0 text-emerald-400"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+    </svg>
+  );
+}
+
+/** 비활성 사유를 title 호버로 안내한다는 시각 신호 (ⓘ) */
+function UrlCopyInfoIcon() {
+  return (
+    <svg
+      className="size-3.5 shrink-0"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm0 1.2a5.3 5.3 0 1 1 0 10.6 5.3 5.3 0 0 1 0-10.6ZM7.25 7a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-1.5 0V7ZM8 4.3a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8Z" />
+    </svg>
+  );
+}
+
 export function ScratchShareMenu({
   persistContent,
   editors,
@@ -43,7 +73,7 @@ export function ScratchShareMenu({
 }: {
   persistContent: ScratchPersistedContent;
   editors: ScratchEditors;
-  onCopyShareUrl: () => void | Promise<void>;
+  onCopyShareUrl: () => Promise<boolean>;
   onImportLayer: (
     layer: ScratchHtmlLayer,
     parts: { head: string; bodyHtml: string },
@@ -51,6 +81,7 @@ export function ScratchShareMenu({
   onNotify: (message: string) => void;
 }) {
   const [urlCopyDisabled, setUrlCopyDisabled] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +92,17 @@ export function ScratchShareMenu({
       cancelled = true;
     };
   }, [persistContent]);
+
+  useEffect(() => {
+    if (!urlCopied) return;
+    const timer = window.setTimeout(() => setUrlCopied(false), COPY_FEEDBACK_MS);
+    return () => window.clearTimeout(timer);
+  }, [urlCopied]);
+
+  const handleCopyShareUrl = useCallback(async () => {
+    const ok = await onCopyShareUrl();
+    if (ok) setUrlCopied(true);
+  }, [onCopyShareUrl]);
 
   const layerParts = (layer: ScratchHtmlLayer) =>
     layer === "source"
@@ -120,19 +162,35 @@ export function ScratchShareMenu({
       )}
     >
       <div className="flex flex-col gap-0.5">
-        <button
-          type="button"
-          disabled={urlCopyDisabled}
-          title={
-            urlCopyDisabled
-              ? URL_COPY_DISABLED_TITLE
-              : "현재 입력을 ?state= URL로 클립보드에 복사"
-          }
-          onClick={() => void onCopyShareUrl()}
-          className={NAV_MENU_ITEM_CLASS}
+        {/* disabled 버튼은 브라우저가 title 툴팁을 안 띄우므로, wrapper에 title을
+            주고 버튼은 pointer-events-none 처리해 호버가 wrapper로 전달되게 한다. */}
+        <span
+          className={`block ${urlCopyDisabled ? "cursor-not-allowed" : ""}`}
+          title={urlCopyDisabled ? URL_COPY_DISABLED_TITLE : undefined}
         >
-          URL 복사
-        </button>
+          <button
+            type="button"
+            disabled={urlCopyDisabled}
+            title={
+              urlCopyDisabled
+                ? undefined
+                : "현재 입력을 ?state= URL로 클립보드에 복사"
+            }
+            onClick={() => void handleCopyShareUrl()}
+            className={`${NAV_MENU_ITEM_CLASS} flex items-center justify-between gap-1.5 ${
+              urlCopyDisabled ? "pointer-events-none" : ""
+            }`}
+          >
+            <span aria-live="polite">
+              {urlCopied ? "복사됨" : "URL 복사"}
+            </span>
+            {urlCopied ? (
+              <CopyCheckIcon />
+            ) : urlCopyDisabled ? (
+              <UrlCopyInfoIcon />
+            ) : null}
+          </button>
+        </span>
         <ShareFlyoutMenu
           label="내보내기"
           submenuExpand="start"

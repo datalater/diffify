@@ -16,7 +16,7 @@ export type ScratchTopBarProps = {
   status: string;
   persistContent: ScratchPersistedContent;
   editors: ScratchEditors;
-  onCopyShareUrl: () => void | Promise<void>;
+  onCopyShareUrl: () => Promise<boolean>;
   onImportLayer: (
     layer: ScratchHtmlLayer,
     parts: { head: string; bodyHtml: string },

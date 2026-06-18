@@ -4,7 +4,13 @@ import {
   formatScratchHeadFragment,
 } from "../lib/format-scratch-html";
 import { createScratchDocument } from "../lib/source-document";
-import { SCRATCH_SOURCE_HEAD_EXAMPLES } from "../lib/scratch-head-examples";
+import {
+  DEFAULT_SCRATCH_RESULT_BODY,
+  DEFAULT_SCRATCH_RESULT_HEAD,
+  DEFAULT_SCRATCH_SOURCE_BODY,
+  DEFAULT_SCRATCH_SOURCE_HEAD,
+  SCRATCH_EXAMPLE_NOTICE,
+} from "../lib/scratch-default-examples";
 import {
   copyScratchShareUrl,
   decodeScratchState,
@@ -104,6 +110,16 @@ function buildPreviewDocs(editors: ScratchEditors) {
   };
 }
 
+/** 안내 주석을 뺀 실제 내용이 있고, 적용할 예시와도 다르면 덮어쓰기 확인이 필요하다. */
+function exampleNeedsOverwriteConfirm(
+  current: string,
+  example: string,
+): boolean {
+  const stripped = current.split(SCRATCH_EXAMPLE_NOTICE).join("").trim();
+  if (stripped === "") return false;
+  return stripped !== example.trim();
+}
+
 function editorsFromSnapshot(snapshot: ScratchPersistSnapshot): ScratchEditors {
   return {
     sourceHead: snapshot.sourceHead,
@@ -181,7 +197,39 @@ export function ScratchPage() {
   const [paneVisibility, setPaneVisibility] = useState<ScratchPaneVisibility>(
     () => ({ ...DEFAULT_SCRATCH_PANE_VISIBILITY }),
   );
-  const [headExamplesOpen, setHeadExamplesOpen] = useState(false);
+  const [examplesDialog, setExamplesDialog] = useState<{
+    title: string;
+    html: string;
+    field: keyof ScratchEditors;
+  } | null>(null);
+
+  const applyExample = (field: keyof ScratchEditors, example: string) => {
+    if (
+      exampleNeedsOverwriteConfirm(editors[field], example) &&
+      !window.confirm(
+        "현재 내용을 예시로 덮어쓸까요?\n(되돌리려면 에디터에서 ⌘Z / Ctrl+Z)",
+      )
+    ) {
+      return;
+    }
+    setEditors((prev) => ({ ...prev, [field]: example }));
+    setExamplesDialog(null);
+  };
+
+  const renderExamplesButton = (
+    title: string,
+    field: keyof ScratchEditors,
+    example: string,
+  ) => (
+    <button
+      type="button"
+      onClick={() => setExamplesDialog({ title, html: example, field })}
+      className={SCRATCH_ACTION_BTN_CLASS}
+      title="예시 스니펫 보기 · 적용"
+    >
+      Examples
+    </button>
+  );
 
   const isDevCompare = import.meta.env.DEV;
   const [captureDeviceScaleFactor, setCaptureDeviceScaleFactor] = useState(1);
@@ -742,19 +790,20 @@ export function ScratchPage() {
     setStatus(`미리보기 크기를 ${width}×${height}으로 되돌렸다.`);
   }, []);
 
-  const handleCopyShareUrl = useCallback(async () => {
+  const handleCopyShareUrl = useCallback(async (): Promise<boolean> => {
     const result = await copyScratchShareUrl(persistContent);
     if (result.ok) {
       setStatus("공유 URL을 클립보드에 복사했다.");
-      return;
+      return true;
     }
     if (result.reason === "too_long") {
       setStatus(
         "?state= 값이 12,000자를 넘어 URL 복사가 불가능하다. HTML 내보내기·가져오기를 사용한다.",
       );
-      return;
+      return false;
     }
     setStatus("클립보드 복사에 실패했다. 주소창 URL을 직접 복사한다.");
+    return false;
   }, [persistContent]);
 
   const togglePane = useCallback((pane: ScratchPaneId) => {
@@ -841,16 +890,16 @@ export function ScratchPage() {
                 }
                 onFormatHead={formatSourceHead}
                 onFormatHtml={formatSourceHtml}
-                headActions={
-                  <button
-                    type="button"
-                    onClick={() => setHeadExamplesOpen(true)}
-                    className={SCRATCH_ACTION_BTN_CLASS}
-                    title="`<head>` 참고 스니펫 (복사용)"
-                  >
-                    Examples
-                  </button>
-                }
+                headActions={renderExamplesButton(
+                  "Source — <head> 예시",
+                  "sourceHead",
+                  DEFAULT_SCRATCH_SOURCE_HEAD,
+                )}
+                htmlActions={renderExamplesButton(
+                  "Source — <body> 예시",
+                  "sourceHtml",
+                  DEFAULT_SCRATCH_SOURCE_BODY,
+                )}
               />
             ) : null}
             {paneVisibility.result ? (
@@ -869,6 +918,16 @@ export function ScratchPage() {
                 }
                 onFormatHead={formatResultHead}
                 onFormatHtml={formatResultHtml}
+                headActions={renderExamplesButton(
+                  "Result — <head> 예시",
+                  "resultHead",
+                  DEFAULT_SCRATCH_RESULT_HEAD,
+                )}
+                htmlActions={renderExamplesButton(
+                  "Result — <body> 예시",
+                  "resultHtml",
+                  DEFAULT_SCRATCH_RESULT_BODY,
+                )}
               />
             ) : null}
           </main>
@@ -1009,10 +1068,15 @@ export function ScratchPage() {
       </div>
 
       <ScratchFullDocumentDialog
-        open={headExamplesOpen}
-        title="Source — head Examples"
-        documentHtml={SCRATCH_SOURCE_HEAD_EXAMPLES}
-        onClose={() => setHeadExamplesOpen(false)}
+        open={examplesDialog !== null}
+        title={examplesDialog?.title ?? ""}
+        documentHtml={examplesDialog?.html ?? ""}
+        onClose={() => setExamplesDialog(null)}
+        onApply={
+          examplesDialog
+            ? () => applyExample(examplesDialog.field, examplesDialog.html)
+            : undefined
+        }
       />
     </div>
   );

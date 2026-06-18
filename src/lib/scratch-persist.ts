@@ -1,4 +1,10 @@
-import { DEFAULT_FIGMA_SOURCE_HEAD } from './source-document';
+import {
+  DEFAULT_SCRATCH_RESULT_BODY,
+  DEFAULT_SCRATCH_RESULT_HEAD,
+  DEFAULT_SCRATCH_SOURCE_BODY,
+  DEFAULT_SCRATCH_SOURCE_HEAD,
+  withExampleNotice,
+} from './scratch-default-examples';
 
 export type ScratchPersistedContent = {
   sourceHead: string;
@@ -181,10 +187,10 @@ export async function decodeScratchState(
 
 export const defaultScratchSnapshot = (): ScratchPersistSnapshot =>
   scratchSnapshotFromContent({
-    sourceHead: DEFAULT_FIGMA_SOURCE_HEAD,
-    sourceHtml: '',
-    resultHead: '',
-    resultHtml: '',
+    sourceHead: withExampleNotice(DEFAULT_SCRATCH_SOURCE_HEAD),
+    sourceHtml: withExampleNotice(DEFAULT_SCRATCH_SOURCE_BODY),
+    resultHead: withExampleNotice(DEFAULT_SCRATCH_RESULT_HEAD),
+    resultHtml: withExampleNotice(DEFAULT_SCRATCH_RESULT_BODY),
     showingSource: true,
   });
 
