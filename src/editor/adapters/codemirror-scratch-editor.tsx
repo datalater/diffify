@@ -1,60 +1,65 @@
-import { html } from '@codemirror/lang-html';
-import { defaultKeymap, indentWithTab } from '@codemirror/commands';
-import {
-  defaultHighlightStyle,
-  syntaxHighlighting,
-} from '@codemirror/language';
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { basicSetup } from "codemirror";
+import { html } from "@codemirror/lang-html";
+import { indentWithTab } from "@codemirror/commands";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
   keymap,
   placeholder as placeholderExt,
-} from '@codemirror/view';
-import { useEffect, useRef } from 'react';
-import { codeMirrorHostClass } from '../scratch-editor-chrome';
-import type { ScratchCodeEditorProps } from '../scratch-code-editor-types';
+} from "@codemirror/view";
+import { useEffect, useRef } from "react";
+import { codeMirrorHostClass } from "../scratch-editor-chrome";
+import type { ScratchCodeEditorProps } from "../scratch-code-editor-types";
 
 const scratchEditorTheme = EditorView.theme(
   {
-    '&': {
-      fontSize: '11px',
-      lineHeight: '1.375',
+    "&": {
+      fontSize: "11px",
+      lineHeight: "1.375",
       fontFamily:
-        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-      height: '100%',
-      maxHeight: '100%',
+        "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+      height: "100%",
+      maxHeight: "100%",
     },
-    '&.cm-focused': {
-      outline: '2px solid #0ea5e9',
-      outlineOffset: '-1px',
+    "&.cm-focused": {
+      outline: "2px solid #0ea5e9",
+      outlineOffset: "-1px",
     },
-    '.cm-scroller': {
-      fontFamily: 'inherit',
-      lineHeight: 'inherit',
-      overflow: 'auto',
-      maxHeight: '100%',
+    ".cm-scroller": {
+      fontFamily: "inherit",
+      lineHeight: "inherit",
+      overflow: "auto",
+      maxHeight: "100%",
     },
-    '.cm-content': {
-      padding: '8px',
-      caretColor: '#0f172a',
+    ".cm-content": {
+      padding: "8px",
+      caretColor: "#0f172a",
     },
-    '.cm-gutters': {
-      display: 'none',
+    ".cm-gutters": {
+      backgroundColor: "#f8fafc",
+      color: "#94a3b8",
+      border: "none",
+      borderRight: "1px solid #e2e8f0",
     },
-    '&.cm-editor': {
-      backgroundColor: '#f8fafc',
-      border: '1px solid #e2e8f0',
-      borderRadius: '0.25rem',
+    ".cm-activeLineGutter": {
+      backgroundColor: "#eef2f7",
     },
-    '&.cm-editor.cm-readonly': {
+    "&.cm-editor": {
+      backgroundColor: "#f8fafc",
+      border: "1px solid #e2e8f0",
+      borderRadius: "0.25rem",
+    },
+    "&.cm-editor.cm-readonly": {
       opacity: 0.6,
     },
   },
   { dark: false },
 );
 
-function languageExtension(language: ScratchCodeEditorProps['language']): Extension {
-  if (language !== 'html') return [];
+function languageExtension(
+  language: ScratchCodeEditorProps["language"],
+): Extension {
+  if (language !== "html") return [];
   return html({
     matchClosingTags: false,
     autoCloseTags: true,
@@ -77,7 +82,7 @@ function createCompartments() {
 export function CodeMirrorScratchEditor({
   value,
   onChange,
-  language = 'html',
+  language = "html",
   readOnly,
   disabled,
   placeholder,
@@ -105,20 +110,20 @@ export function CodeMirrorScratchEditor({
     const state = EditorState.create({
       doc: value,
       extensions: [
-        scratchEditorTheme,
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-        EditorView.lineWrapping,
+        // Mod-s는 basicSetup 키맵보다 먼저 등록해 우선권을 갖게 한다.
         keymap.of([
-          ...defaultKeymap,
-          indentWithTab,
           {
-            key: 'Mod-s',
+            key: "Mod-s",
             run: () => {
               onFormatRef.current?.();
               return true;
             },
           },
+          indentWithTab,
         ]),
+        basicSetup,
+        scratchEditorTheme,
+        EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           const next = update.state.doc.toString();
@@ -184,7 +189,7 @@ export function CodeMirrorScratchEditor({
   return (
     <div
       ref={hostRef}
-      className={`${codeMirrorHostClass(fillHeight)} ${disabled ? 'pointer-events-none' : ''} ${className ?? ''}`}
+      className={`${codeMirrorHostClass(fillHeight)} ${disabled ? "pointer-events-none" : ""} ${className ?? ""}`}
     />
   );
 }
