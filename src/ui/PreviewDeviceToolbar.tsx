@@ -201,30 +201,31 @@ export function PreviewDeviceToolbar({
         className="mx-0.5 hidden h-3 w-px bg-slate-300 sm:inline-block"
         aria-hidden
       />
-      <button
-        type="button"
-        onClick={onToggleSyncScroll}
-        title="전환 시 source↔result 스크롤 위치를 공유한다."
-        className={CHIP_CLASS(syncScroll)}
-      >
-        sync
-      </button>
-      <span
-        className="font-mono tabular-nums"
-        title="source·result 세로 스크롤 위치 (전체 대비 %) — 보고 있는 쪽이 진하게 표시된다."
-      >
-        <span
-          className={showingSource ? "text-slate-900" : "text-slate-400"}
+      {/* sync scroll 토글 + 위치 표시는 한 기능이므로 함께 줄바꿈되도록 묶는다 */}
+      <span className="inline-flex items-center gap-2 whitespace-nowrap">
+        <button
+          type="button"
+          onClick={onToggleSyncScroll}
+          title="전환 시 source↔result 스크롤 위치를 공유한다."
+          className={CHIP_CLASS(syncScroll)}
         >
-          source {formatScroll(previewScroll?.source ?? null)}
-        </span>
-        <span className="mx-1 text-slate-300" aria-hidden>
-          ·
-        </span>
+          sync scroll
+        </button>
         <span
-          className={!showingSource ? "text-slate-900" : "text-slate-400"}
+          className="font-mono tabular-nums"
+          title="source·result 세로 스크롤 위치 (전체 대비 %) — 보고 있는 쪽이 진하게 표시된다."
         >
-          result {formatScroll(previewScroll?.result ?? null)}
+          <span className={showingSource ? "text-slate-900" : "text-slate-400"}>
+            source {formatScroll(previewScroll?.source ?? null)}
+          </span>
+          <span className="mx-1 text-slate-300" aria-hidden>
+            ·
+          </span>
+          <span
+            className={!showingSource ? "text-slate-900" : "text-slate-400"}
+          >
+            result {formatScroll(previewScroll?.result ?? null)}
+          </span>
         </span>
       </span>
     </div>

@@ -947,10 +947,10 @@ export function ScratchPage() {
 
         {paneVisibility.preview ? (
           <section
-            className={`flex min-h-0 flex-col ${visibleEditorPaneCount === 0 ? "p-4 pb-8" : "px-4 pb-8"} ${previewOnly || visibleEditorPaneCount === 0 ? "min-h-0 flex-1" : ""} ${!hydrated ? "pointer-events-none" : ""}`}
+            className={`flex min-h-0 flex-1 flex-col ${visibleEditorPaneCount === 0 ? "p-4 pb-8" : "px-4 pb-8"} ${!hydrated ? "pointer-events-none" : ""}`}
           >
             <div
-              className={`flex min-h-0 flex-col overflow-auto border border-slate-300 bg-slate-100 p-3 shadow-sm ${previewOnly || visibleEditorPaneCount === 0 ? "min-h-0 flex-1" : ""}`}
+              className="flex min-h-0 flex-1 flex-col overflow-auto border border-slate-300 bg-slate-100 p-3 shadow-sm"
             >
               <div className={`mb-2 ${SCRATCH_PREVIEW_PANEL_CLASS}`}>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
@@ -1008,8 +1008,8 @@ export function ScratchPage() {
                     }
                   >
                     {previewSubstrate === "code" || !isDevCompare
-                      ? "Space/D · Source/Result · S · sync"
-                      : "Space/D · 레이어"}
+                      ? "Shortcut · Space/D Source/Result · S sync scroll"
+                      : "Shortcut · Space/D 레이어"}
                   </span>
                 </div>
                 {isDevCompare ? (
@@ -1036,8 +1036,9 @@ export function ScratchPage() {
                   </div>
                 ) : null}
               </div>
-              <div className="inline-flex max-w-full flex-col items-stretch overflow-x-auto overflow-y-visible rounded-md shadow-sm ring-1 ring-slate-300/90">
+              <div className="flex min-h-0 max-w-full flex-1 flex-col items-stretch overflow-auto rounded-md shadow-sm ring-1 ring-slate-300/90">
                 <PreviewDeviceToolbar
+                  className="sticky top-0 z-10"
                   previewWidth={previewWidth}
                   previewHeight={previewHeight}
                   widthMode={previewWidthMode}
